@@ -10,6 +10,7 @@ _TBU_
 
 * Use `my_requirements.yaml` file
 * NOTE) You need to install appropriate version of cuda(11.6), cudnn, and pytorch first
+* NOTE) If any problem occurs, please check [here](https://github.com/NirAharon/BoT-SORT#installation) for further information
 
 ```shell
 conda env create -f my_requirements.yaml
