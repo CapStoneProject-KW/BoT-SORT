@@ -2,6 +2,7 @@ import argparse
 import time
 from pathlib import Path
 import sys
+import os
 
 import cv2
 import torch
@@ -22,6 +23,10 @@ from tracker.tracking_utils.timer import Timer
 sys.path.insert(0, './yolov7')
 sys.path.append('.')
 
+# source formats
+img_formats = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dng', 'webp', 'mpo']  # acceptable image suffixes
+vid_formats = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
+
 def write_results(filename, results):
     title = f'frame\tid\tx\ty\tw\th\ts\n'
     with open(filename, 'w') as f:
@@ -32,8 +37,39 @@ def write_results(filename, results):
 
 def detect(save_img=False):
     ### Parsing arguments
+    run_mode = opt.mode
+    source = opt.source
+    src_format = source.split('.')[-1]
+    # detection mode
+    if run_mode == 'detection':
+        # it should be image or video
+        assert src_format in (img_formats + vid_formats), 'ERROR: Invalid source format'
+        # designate model weight
+        weights = 'pretrained/yolov7.pt'
+    # tracking mode
+    elif run_mode == 'tracking':
+        # it must be a video
+        assert src_format in vid_formats, 'ERROR: Source must be a video in tracking mode'
+        # designate model weight
+        weights = 'pretrained/yolov7-w6-pose.pt'
+    # invalid mode
+    else:
+        print(f"ERROR: Invalid '{run_mode}' mode designated")
+        exit(-1)
+
+    # flag: display demo, flag: save result in txt, flag: save command in txt, image size for inference (resize), flag: trace model, flag: save keypoint labels
+    view_img, save_txt, save_cmd, imgsz, trace, kpt_label = (
+        opt.view_img, True, True, opt.img_size, opt.trace, (run_mode == 'tracking')
+    )
+    # 
+    conf_thres, iou_thres, save_conf, classes, fuse_score, agnostic_nms, with_reid = (
+        opt.conf_thres, opt.iou_thres, True, [0], True, True, True
+    )
+    '''
     # video path, model weight path, flag: display demo, flag: save result in txt, flag: save command in txt, image size for inference (resize), flag: trace model
     source, weights, view_img, save_txt, save_cmd, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.save_cmd, opt.img_size, opt.trace
+    kpt_label, det_mode, kpt_mode = opt.kpt_label, opt.det_mode, opt.kpt_mode
+    '''
     # flag: save result in video (or images)
     save_img = not opt.nosave and not source.endswith('.txt')
     # webcam
@@ -50,6 +86,18 @@ def detect(save_img=False):
         with open(f'{save_dir}/cmd.txt', 'w') as f:
             f.write('python' + ' ' + ' '.join(sys.argv))
 
+    if run_mode == 'detection':
+        det_path = str(save_dir / 'det_result.txt')
+        with open(det_path, 'w') as f:
+            f.write('Labels: (idx x1 y1 w h s)\n')
+    elif run_mode == 'tracking':
+        mot_path = str(save_dir / 'mot_result.txt')
+        kpt_path = str(save_dir / 'kpt_result.txt')
+        with open(mot_path, 'w') as f:
+            f.write('Labels: (fid tid x1 y1 w h s)\n')
+        with open(kpt_path, 'w') as f:
+            f.write('Labels: (fid tid x y s kid)\n')
+
     ### Initialize
     # set logging format
     set_logging()
@@ -61,13 +109,14 @@ def detect(save_img=False):
     ### Load model
     # Load YOLOv7 model with designated weight path (FP32 model)
     model = attempt_load(weights, map_location=device)
+    print(f"Load weights: {weights}")
+    # print(model)
     # model stride
     stride = int(model.stride.max())
     # inference size
     imgsz = check_img_size(imgsz, s=stride)
-
-    # save model weight
-    if trace: model = TracedModel(model, device, opt.img_size)
+    # save model weight (trace version)
+    if trace: model = TracedModel(model, device, imgsz)
     # to FP16
     if half:  model.half()  
 
@@ -91,7 +140,8 @@ def detect(save_img=False):
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(100)]
 
     ### Create tracker
-    tracker = BoTSORT(opt, frame_rate=30.0)
+    if run_mode == 'tracking':
+        tracker = BoTSORT(opt, frame_rate=30.0)
 
     ### Run inference
     # On gpu
@@ -99,9 +149,6 @@ def detect(save_img=False):
         model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
     # check inference time
     t0 = time.time()
-    # results of MOT
-    # format: frame_id, track_id, x, y, w, h, s
-    mot_result = []
     # for each frame, 
     # video path, converted image, origin frame, video capture object
     for frame_id, (path, img, im0s, vid_cap) in enumerate(dataset):
@@ -128,7 +175,7 @@ def detect(save_img=False):
         [tensor([[ 91.31250, 242.00000, 204.25000, 549.00000,   0.92432,   0.00000],
         [184.00000, 241.00000, 273.50000, 557.00000,   0.91113,   0.00000]], device='cuda:0')]
         '''
-        pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
+        pred = non_max_suppression(pred, conf_thres, iou_thres, classes=classes, agnostic=agnostic_nms, kpt_label = kpt_label)
         # pytorch-accurate time
         # t2 = time_synchronized()
 
@@ -144,6 +191,12 @@ def detect(save_img=False):
         '''
         results = []
         # For detections of current frame, 
+        '''det
+        0~3: xyxy
+        4: conf
+        5: class
+        6~: 17 keypoints (x, y, conf)
+        '''
         for i, det in enumerate(pred):
             # path, string, origin frame, frame index
             if webcam:  # batch_size >= 1
@@ -151,17 +204,70 @@ def detect(save_img=False):
             else:
                 p, s, im0, frame = path, '', im0s, getattr(dataset, 'frame', 0)
 
+            # Normalization gain whwh (for saving result)
+            gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]
             # Run tracker
             detections = []
+
+            # NOTE) Obtain adjusted coordinates of detection bboxes and keypoints
             if len(det):
                 # scaled coordinates wrt origin frame
-                boxes = scale_coords(img.shape[2:], det[:, :4], im0.shape)
+                # detections[:, :4] = boxes
+                boxes = scale_coords(img.shape[2:], det[:, :4], im0.shape, kpt_label=False)
+                # det[:, 6:] == kpt_boxes
+                if run_mode == 'tracking':
+                    kpt_boxes = scale_coords(img.shape[2:], det[:, 6:], im0.shape, kpt_label=kpt_label, step=3)
+                
                 # to cpu
                 boxes = boxes.cpu().numpy()
+                if run_mode == 'tracking':
+                    kpt_boxes = kpt_boxes.cpu().numpy()
                 detections = det.cpu().numpy()
                 # replace to scaled coordinaets of bbox
                 detections[:, :4] = boxes
+                # replace to scaled coordinates of kpts
+                if run_mode == 'tracking':
+                    detections[:, 6:] = kpt_boxes
 
+                # Save results of detection
+                if run_mode == 'detection':
+                    # For each detection, 
+                    for det_index, (*xyxy, conf, cls) in enumerate(reversed(detections[:, :6])):
+                        # Write to file
+                        if save_txt: 
+                            # normalized xywh
+                            xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist() 
+                            # label format
+                            x1, y1, x2, y2 = detections[det_index, :4]
+                            w, h = x2 - x1, y2 - y1
+                            s = conf
+                            det_line = (frame_id, det_index + 1, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
+                            # save detection result
+                            with open(det_path, 'a') as f:
+                                f.write(('%g ' * len(det_line)).rstrip() % det_line+ '\n')
+                        # Draw bbox to an image
+                        if save_img: 
+                            c = int(cls)
+                            if opt.hide_labels_name:
+                                label = None
+                            else:
+                                label = (names[c] if opt.hide_conf else f'{names[c]} {conf:.2f}')
+                            plot_one_box(xyxy, im0, 
+                                        label=label, 
+                                        color=colors[c], 
+                                        line_thickness=2,
+                                        orig_shape=im0.shape[:2],
+                                        nobbox=False)
+                    # Save result image (image with detections)
+                    p = Path(p)  # to Path
+                    save_path = str(save_dir / p.name).split('.')[0] + '.jpg'  # img.jpg
+                    if save_img:
+                        cv2.imwrite(save_path, im0)
+
+                    print(f'Detection done. ({time.time() - t0:.3f}s)')
+                    return
+                
+            # NOTE) Process trackers 
             '''Example
             (for tenth frame)
             OT_1_(1-10)
@@ -180,13 +286,17 @@ def detect(save_img=False):
             online_scores = []
             # online object class
             online_cls = []
+            # online object keypoints per frame
+            online_kpts = []
 
             # for each tracking
-            for t in online_targets:
+            for ti, t in enumerate(online_targets):
                 tlwh = t.tlwh
                 tlbr = t.tlbr
+                xywh = t.xywh
                 tid = t.track_id
                 tcls = t.cls
+                tkpts = t.kpts
                 # if area of bbox is bigger than min_box_area,
                 if tlwh[2] * tlwh[3] > opt.min_box_area:
                     # [t, l, w, h, id, score, class] for each online valid bboxes
@@ -202,29 +312,62 @@ def detect(save_img=False):
                     )
 
                     # save mot result of current frame
-                    # NOTE) Consider saving coordinates from 'detections' list
-                    mot_result.append(
-                        f"{frame_id}\t{tid}\t{tlwh[0]:5.2f}\t{tlwh[1]:5.2f}\t{tlwh[2]:5.2f}\t{tlwh[3]:5.2f}\t{t.score:5.2f}\n"
-                    )
+                    (x1, y1, w, h), s = tlwh[:4], t.score
+                    mot_line = (frame_id, tid, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
+                    if run_mode == 'tracking':
+                        with open(mot_path, 'a') as f:
+                            f.write(('%g ' * len(mot_line)).rstrip() % mot_line + '\n')
 
-                    if save_img or view_img:  # Add bbox to image
+                    # save keypoint extraction result of current frame
+                    # tkpts: dict = {0: [t, l, b, r, s, c, x0, y0, s1, x1, y1, s1, ...], 1: [...], ...}
+                    if frame_id in tkpts:
+                        tkpt = tkpts[frame_id][6:]
+                    else:
+                        continue
+                    k_step = 3
+                    num_kpts = len(tkpt) // k_step
+                    for kid in range(num_kpts):
+                        x_coord, y_coord = tkpt[k_step * kid], tkpt[k_step * kid + 1]
+                        if not (x_coord % 640 == 0 or y_coord % 640 == 0):
+                        # if x_coord % imgsz != 0 and y_coord % imgsz != 0:
+                            conf = tkpt[k_step * kid + 2]
+                            # dont save the keypoint if its score is less than kpt_thres
+                            if conf < opt.kpt_thres:
+                                continue
+                            x, y, s = x_coord, y_coord, conf
+                            kpt_line = (frame_id, tid, *list(map(lambda x: round(x, 2), [x, y, s])), kid)
+                            if run_mode == 'tracking':
+                                with open(kpt_path, 'a') as f:
+                                    f.write(('%g ' * len(kpt_line)).rstrip() % kpt_line + '\n')
+                    if run_mode == 'tracking':
+                            with open(kpt_path, 'a') as f:
+                                f.write('\n')
+
+                    # Add bbox and kpts to image
+                    if save_img or view_img: 
                         if opt.hide_labels_name:
                             label = f'{tid}, {int(tcls)}'
                         else:
                             label = f'{tid}, {names[int(tcls)]}'
-                        plot_one_box(tlbr, im0, label=label, color=colors[int(tid) % len(colors)], line_thickness=2)
+                        plot_one_box(tlbr, im0, 
+                                     label=label, 
+                                     color=colors[int(tid) % len(colors)], 
+                                     line_thickness=2, 
+                                     kpt_label=kpt_label, 
+                                     kpts=tkpt, 
+                                     steps=k_step, 
+                                     orig_shape=im0.shape[:2],
+                                     nobbox=False)
+                                     
             p = Path(p)  # to Path
             save_path = str(save_dir / p.name)  # img.jpg
-
-            # Print time (inference + NMS)
-            # print(f'{s}Done. ({t2 - t1:.3f}s)')
 
             # Stream results
             if view_img:
                 cv2.imshow('BoT-SORT', im0)
                 cv2.waitKey(1)  # 1 millisecond
 
-            # Save results (image with detections)
+            # Save results (image with tracking + keypoints)
             if save_img:
                 if dataset.mode == 'image':
                     cv2.imwrite(save_path, im0)
@@ -243,23 +386,18 @@ def detect(save_img=False):
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
 
-    ### Save MOT result in txt
-    if save_txt or save_img:
-        # print(len(results))
-        write_results(f'{save_dir}/labels.txt', mot_result)
-        # s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
-        # print(f"Results saved to {save_dir}{s}")
 
-    print(f'Done. ({time.time() - t0:.3f}s)')
+    print(f'Tracking done. ({time.time() - t0:.3f}s)')
+    return
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)') #
     parser.add_argument('--source', type=str, default='inference/images', help='source')  # file/folder, 0 for webcam
-    parser.add_argument('--img-size', type=int, default=1920, help='inference size (pixels)')
-    parser.add_argument('--conf-thres', type=float, default=0.09, help='object confidence threshold') #
-    parser.add_argument('--iou-thres', type=float, default=0.7, help='IOU threshold for NMS') #
+    parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
+    parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold') #
+    parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS') #
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--view-img', action='store_true', help='display results') #
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt') #
@@ -302,6 +440,22 @@ if __name__ == '__main__':
     parser.add_argument('--appearance_thresh', type=float, default=0.25,
                         help='threshold for rejecting low appearance similarity reid matches')
 
+    # Object detection
+    parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
+    parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
+    
+    # Keypoint extraction
+    parser.add_argument('--kpt-thres', type=float, default=0.5, help='threshold for rejecting low confidence keypoints')
+    parser.add_argument('--kpt-label', action='store_true', help='use keypoint labels')
+    parser.add_argument('--nobbox', action='store_true', help='do not show bbox around person')
+
+    # run mode
+    parser.add_argument('--mode', type=str, default=None, help='run mode: detection or tracking')
+    # parser.add_argument('--det-mode', action='store_true', help='only detection mode')
+    # parser.add_argument('--kpt-mode', action='store_true', help='detection + keypoint mode')
+    # parser.add_argument('--track-mode', action='store_true', help='full mode: detection + keypoint + tracking')
+
+    
     opt = parser.parse_args()
 
     opt.jde = False

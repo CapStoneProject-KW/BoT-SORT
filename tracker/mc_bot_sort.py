@@ -14,7 +14,7 @@ from fast_reid.fast_reid_interfece import FastReIDInterface
 class STrack(BaseTrack):
     shared_kalman = KalmanFilter()
 
-    def __init__(self, tlwh, score, cls, feat=None, feat_history=50):
+    def __init__(self, frame_id, tlwh, score, cls, kpt, feat=None, feat_history=50):
 
         # wait activate
         self._tlwh = np.asarray(tlwh, dtype=np.float)
@@ -35,6 +35,14 @@ class STrack(BaseTrack):
             self.update_features(feat)
         self.features = deque([], maxlen=feat_history)
         self.alpha = 0.9
+
+        self.kpts = {frame_id: kpt} # int, list (shape: (17, 2))
+
+    def update_kpts(self, kpts: dict):
+        # TODO: update frame keypoints
+        for frame_id, kpt in list(kpts.items()):
+            if frame_id not in self.kpts:
+                self.kpts[frame_id] = kpt
 
     def update_features(self, feat):
         feat /= np.linalg.norm(feat)
@@ -158,6 +166,9 @@ class STrack(BaseTrack):
         self.score = new_track.score
         self.update_cls(new_track.cls, new_track.score)
 
+        # update keypoints
+        self.update_kpts(new_track.kpts)
+
     @property
     def tlwh(self):
         """Get current position in bounding box format `(top left x, top left y,
@@ -186,6 +197,12 @@ class STrack(BaseTrack):
         ret = self.tlwh.copy()
         ret[:2] += ret[2:] / 2.0
         return ret
+
+    @property
+    def frame_kpts(self):
+        """Save keypoint coordinates for each frame
+        """
+
 
     @staticmethod
     def tlwh_to_xyah(tlwh):
@@ -238,7 +255,7 @@ class BoTSORT(object):
 
         BaseTrack.clear_count()
 
-        self.frame_id = 0
+        self.frame_id = -1
         self.args = args
 
         self.track_high_thresh = args.track_high_thresh
@@ -267,7 +284,7 @@ class BoTSORT(object):
         '''
         Description:
         Args:
-            output_results: scaled detection bboxes (x, y, w, h)
+            output_results: scaled detection bboxes + keypoints
             img: origin frame image
         Ret:
             output_stracks: online trackers for current frame
@@ -291,7 +308,9 @@ class BoTSORT(object):
             scores = output_results[:, 4]
             # class
             classes = output_results[:, 5]
-            # features (-1)
+            # 17 keypoints
+            kpts = output_results[:, 6:]
+            # ReID features
             features = output_results[:, 6:]
 
             # Remove bad detections
@@ -303,6 +322,8 @@ class BoTSORT(object):
             scores = scores[lowest_inds]
             # low conf class
             classes = classes[lowest_inds]
+            # low conf kpts
+            kpts = output_results[lowest_inds]
             # low conf features
             features = output_results[lowest_inds]
 
@@ -315,6 +336,8 @@ class BoTSORT(object):
             scores_keep = scores[remain_inds]
             # high conf class
             classes_keep = classes[remain_inds]
+            # high conf kpts
+            kpts_keep = kpts[remain_inds]
             # high conf features
             features_keep = features[remain_inds]
         # no detection
@@ -325,27 +348,32 @@ class BoTSORT(object):
             dets = []
             scores_keep = []
             classes_keep = []
+            kpts_keep = []
+            features_inds = []
 
         '''Extract embeddings '''
         # extracted features for high conf bboxes with ReID module
         if self.args.with_reid:
             features_keep = self.encoder.inference(img, dets)
         # high conf bboxes
+        # print(f'frame_id(tracker): ', self.frame_id)
         if len(dets) > 0:
             '''Detections'''
             # detections = [STrack(x, y, w, h, score, class, features), ...]
             if self.args.with_reid:
-                detections = [STrack(STrack.tlbr_to_tlwh(tlbr), s, c, f) for
-                              (tlbr, s, c, f) in zip(dets, scores_keep, classes_keep, features_keep)]
+                detections = [STrack(self.frame_id, STrack.tlbr_to_tlwh(tlbr), s, c, k, f) for
+                              (tlbr, s, c, k, f) in zip(dets, scores_keep, classes_keep, kpts_keep, features_keep)]
             else:
-                detections = [STrack(STrack.tlbr_to_tlwh(tlbr), s, c) for
-                              (tlbr, s, c) in zip(dets, scores_keep, classes_keep)]
+                detections = [STrack(self.frame_id, STrack.tlbr_to_tlwh(tlbr), s, c, k) for
+                              (tlbr, s, c, k) in zip(dets, scores_keep, classes_keep, kpts_keep)]
         else:
             detections = []
 
         ''' Step 1: Add newly detected tracklets to tracked_stracks'''
         unconfirmed = []
+        # tracked_stracks: stracks for current frame
         tracked_stracks = []  # type: list[STrack]
+        # self.tracked_stracks: existing stracks
         for track in self.tracked_stracks:
             # deactivated tracks
             if not track.is_activated:
@@ -355,7 +383,8 @@ class BoTSORT(object):
                 tracked_stracks.append(track)
 
         ''' Step 2: First association, with high score detection boxes'''
-        strack_pool = joint_stracks(tracked_stracks, self.lost_stracks)
+        # Merge tracked_stracks and self.lost_stracks
+        strack_pool = joint_stracks(self.frame_id, tracked_stracks, self.lost_stracks, 'call from 1')
 
         # Predict the current location with KF
         STrack.multi_predict(strack_pool)
@@ -393,13 +422,18 @@ class BoTSORT(object):
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=self.args.match_thresh)
 
         for itracked, idet in matches:
+            # matched tracks
             track = strack_pool[itracked]
+            # matched detections
             det = detections[idet]
+            # update matched tracks using detections of current frame
             if track.state == TrackState.Tracked:
                 track.update(detections[idet], self.frame_id)
+                # the track was activated in advance
                 activated_stracks.append(track)
             else:
                 track.re_activate(det, self.frame_id, new_id=False)
+                # the track wasn't activated
                 refind_stracks.append(track)
 
         ''' Step 3: Second association, with low score detection boxes'''
@@ -410,16 +444,18 @@ class BoTSORT(object):
             dets_second = bboxes[inds_second]
             scores_second = scores[inds_second]
             classes_second = classes[inds_second]
+            kpts_second = kpts[inds_second]
         else:
             dets_second = []
             scores_second = []
             classes_second = []
+            kpts_second = []
 
         # association the untrack to the low score detections
         if len(dets_second) > 0:
             '''Detections'''
-            detections_second = [STrack(STrack.tlbr_to_tlwh(tlbr), s, c) for
-                                 (tlbr, s, c) in zip(dets_second, scores_second, classes_second)]
+            detections_second = [STrack(self.frame_id, STrack.tlbr_to_tlwh(tlbr), s, c, k) for
+                                 (tlbr, s, c, k) in zip(dets_second, scores_second, classes_second, kpts_second)]
         else:
             detections_second = []
 
@@ -473,8 +509,8 @@ class BoTSORT(object):
 
         """ Merge """
         self.tracked_stracks = [t for t in self.tracked_stracks if t.state == TrackState.Tracked]
-        self.tracked_stracks = joint_stracks(self.tracked_stracks, activated_stracks)
-        self.tracked_stracks = joint_stracks(self.tracked_stracks, refind_stracks)
+        self.tracked_stracks = joint_stracks(self.frame_id, self.tracked_stracks, activated_stracks, 'call from 2')
+        self.tracked_stracks = joint_stracks(self.frame_id, self.tracked_stracks, refind_stracks, 'call from 3')
         self.lost_stracks = sub_stracks(self.lost_stracks, self.tracked_stracks)
         self.lost_stracks.extend(lost_stracks)
         self.lost_stracks = sub_stracks(self.lost_stracks, self.removed_stracks)
@@ -494,19 +530,34 @@ class BoTSORT(object):
 
         return output_stracks
 
-
-def joint_stracks(tlista, tlistb):
+# merge two strack lists
+def joint_stracks(frame_id, tlista, tlistb, s):
+    # print(s)
     exists = {}
-    res = []
+    res = {}
     for t in tlista:
+        # existing track id
         exists[t.track_id] = 1
-        res.append(t)
+        res[t.track_id] = t
     for t in tlistb:
         tid = t.track_id
-        if not exists.get(tid, 0):
+        # existing object
+        if tid in exists:
+            # merge new kpts to existing track
+            # print('t.kpts', t.kpts, sep='\n')
+            # print('res[tid].kpts')
+            # print(res[tid].kpts)
+            # print('t.kpts')
+            # print(t.kpts)
+            res[tid].update_kpts(t.kpts)
+        # new object
+        else:
             exists[tid] = 1
-            res.append(t)
-    return res
+            res[tid] = t
+    # print('res.values()')
+    # print(*[t.kpts for t in res.values()])
+    # if frame_id == 4: exit(-1)
+    return list(res.values())
 
 
 def sub_stracks(tlista, tlistb):

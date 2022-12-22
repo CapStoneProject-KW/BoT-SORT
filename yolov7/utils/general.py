@@ -316,28 +316,41 @@ def resample_segments(segments, n=1000):
     return segments
 
 
-def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
+def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None, kpt_label=False, step=2):
     # Rescale coords (xyxy) from img1_shape to img0_shape
     if ratio_pad is None:  # calculate from img0_shape
         gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])  # gain  = old / new
         pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (img1_shape[0] - img0_shape[0] * gain) / 2  # wh padding
     else:
-        gain = ratio_pad[0][0]
+        gain = ratio_pad[0]
         pad = ratio_pad[1]
+    if isinstance(gain, (list, tuple)):
+        gain = gain[0]
 
-    coords[:, [0, 2]] -= pad[0]  # x padding
-    coords[:, [1, 3]] -= pad[1]  # y padding
-    coords[:, :4] /= gain
-    clip_coords(coords, img0_shape)
+    if not kpt_label:
+        coords[:, [0, 2]] -= pad[0]  # x padding
+        coords[:, [1, 3]] -= pad[1]  # y padding
+        coords[:, [0, 2]] /= gain
+        coords[:, [1, 3]] /= gain
+        clip_coords(coords[0:4], img0_shape)
+    else:
+        coords[:, 0::step] -= pad[0]  # x padding
+        coords[:, 1::step] -= pad[1]  # y padding
+        coords[:, 0::step] /= gain
+        coords[:, 1::step] /= gain
+        clip_coords(coords, img0_shape, step=step)
+        
     return coords
 
 
-def clip_coords(boxes, img_shape):
+def clip_coords(boxes, img_shape, step = 2):
     # Clip bounding xyxy bounding boxes to image shape (height, width)
-    boxes[:, 0].clamp_(0, img_shape[1])  # x1
-    boxes[:, 1].clamp_(0, img_shape[0])  # y1
-    boxes[:, 2].clamp_(0, img_shape[1])  # x2
-    boxes[:, 3].clamp_(0, img_shape[0])  # y2
+    boxes[:, 0::step].clamp_(0, img_shape[1])  # x1, x2
+    boxes[:, 1::step].clamp_(0, img_shape[0])  # y1, y2
+    # boxes[:, 0].clamp_(0, img_shape[1])  # x1
+    # boxes[:, 1].clamp_(0, img_shape[0])  # y1
+    # boxes[:, 2].clamp_(0, img_shape[1])  # x2
+    # boxes[:, 3].clamp_(0, img_shape[0])  # y2
 
 
 def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7):
@@ -605,14 +618,15 @@ def box_diou(box1, box2, eps: float = 1e-7):
 
 
 def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=None, agnostic=False, multi_label=False,
-                        labels=()):
+                        labels=(), kpt_label=False, nc=None, nkpt=None):
     """Runs Non-Maximum Suppression (NMS) on inference results
 
     Returns:
          list of detections, on (n,6) tensor per image [xyxy, conf, cls]
     """
 
-    nc = prediction.shape[2] - 5  # number of classes
+    # nc = prediction.shape[2] - 5  # number of classes
+    nc = prediction.shape[2] - 5  if not kpt_label else prediction.shape[2] - 56 # number of classes
     xc = prediction[..., 4] > conf_thres  # candidates
 
     # Settings
@@ -645,7 +659,7 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
             continue
 
         # Compute conf
-        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+        x[:, 5:5+nc] *= x[:, 4:5]  # conf = obj_conf * cls_conf
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
         box = xywh2xyxy(x[:, :4])
@@ -655,8 +669,13 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
             i, j = (x[:, 5:] > conf_thres).nonzero(as_tuple=False).T
             x = torch.cat((box[i], x[i, j + 5, None], j[:, None].float()), 1)
         else:  # best class only
-            conf, j = x[:, 5:].max(1, keepdim=True)
-            x = torch.cat((box, conf, j.float()), 1)[conf.view(-1) > conf_thres]
+            if not kpt_label:
+                conf, j = x[:, 5:].max(1, keepdim=True)
+                x = torch.cat((box, conf, j.float()), 1)[conf.view(-1) > conf_thres]
+            else:
+                kpts = x[:, 6:]
+                conf, j = x[:, 5:6].max(1, keepdim=True)
+                x = torch.cat((box, conf, j.float(), kpts), 1)[conf.view(-1) > conf_thres]
 
         # Filter by class
         if classes is not None:
