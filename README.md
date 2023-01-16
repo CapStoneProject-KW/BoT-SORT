@@ -69,6 +69,37 @@ python tools/mc_demo_yolov7.py --mode tracking --source {path_to_video} --projec
 {
     "0": { # frame id
         "1": { # track id
+            "0": { # keypoint id
+                "x": 240.27,
+                "y": 290.25,
+                "s": 0.99
+            },
+            "1": {
+                "x": 247.44,
+                "y": 284.34,
+                "s": 0.99
+            },
+            ..., 
+            "16": { # 17 keypoints
+                "x": 231.97,
+                "y": 599.06,
+                "s": 0.95
+            }
+        },
+        ..., 
+    }, 
+    ..., 
+}
+```
+
+
+
+**MOT result**
+
+```json
+{
+    "0": { # frame id
+        "1": { # track id
             "x1": 196.78,
             "y1": 264.36,
             "w": 94.85,
@@ -79,13 +110,6 @@ python tools/mc_demo_yolov7.py --mode tracking --source {path_to_video} --projec
     },
     ..., 
 }
-```
-
-
-
-**MOT result**
-
-```json
 ```
 
 
