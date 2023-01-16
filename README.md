@@ -16,7 +16,7 @@ _TBU_
 conda env create -f my_requirements.yaml
 ```
 
-Then, run setup.py to setup environment.
+Then, run `setup.py` to setup environment.
 
 ```shell
 python3 setup.py develop
@@ -37,6 +37,37 @@ python tools/mc_demo_yolov7.py --mode detection --source {path_to_video} --proje
 ```shell
 python tools/mc_demo_yolov7.py --mode tracking --source {path_to_video} --project {path_to_save_project}
 ```
+
+## Result format
+
+**Detection result**
+
+```json
+[
+	{
+        "id": 1, 
+        "x1": 89.73, 
+        "y1": 272.25, 
+        "w": 127.05, 
+        "h": 345.38, 
+        "s": 0.91
+    }, 
+    {
+        ...
+    },
+    ...
+]
+```
+
+
+
+**Keypoint extraction result**
+
+
+
+**MOT result**
+
+
 
 ## Acknowledgement
 
