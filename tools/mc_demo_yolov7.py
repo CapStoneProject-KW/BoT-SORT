@@ -262,11 +262,11 @@ def detect(save_img=False):
                         # Save detection result
                         if save_json:
                             det_result[det_index + 1] = {
-                                    "x1": float(round(x1, 2)), 
-                                    "y1": float(round(y1, 2)), 
-                                    "w": float(round(w, 2)), 
-                                    "h": float(round(h, 2)), 
-                                    "s": float(round(s, 2)) 
+                                    "x1": round(float(x1), 2), 
+                                    "y1": round(float(y1), 2), 
+                                    "w": round(float(w), 2), 
+                                    "h": round(float(h), 2), 
+                                    "s": round(float(s), 2) 
                             }
                         # Write to file
                         if save_txt: 
@@ -352,11 +352,11 @@ def detect(save_img=False):
                     mot_line = (frame_id, tid, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
                     if run_mode == 'tracking':
                         mot_result[frame_id][tid] = {
-                            "x1": float(round(x1, 2)), 
-                            "y1": float(round(y1, 2)), 
-                            "w": float(round(w, 2)), 
-                            "h": float(round(h, 2)), 
-                            "s": float(round(s, 2)) 
+                            "x1": round(float(x1), 2), 
+                            "y1": round(float(y1), 2), 
+                            "w": round(float(w), 2), 
+                            "h": round(float(h), 2), 
+                            "s": round(float(s), 2) 
                         }
                         with open(mot_path, 'a') as f:
                             f.write(('%g ' * len(mot_line)).rstrip() % mot_line + '\n')
@@ -381,9 +381,9 @@ def detect(save_img=False):
                             '''
                             x, y, s = x_coord, y_coord, conf
                             kpt_result[frame_id][tid][kid] = {
-                                "x": float(round(x, 2)), 
-                                "y": float(round(y, 2)), 
-                                "s": float(round(s, 2))
+                                "x": round(float(x), 2), 
+                                "y": round(float(y), 2), 
+                                "s": round(float(s), 2)
                             }
                             kpt_line = (frame_id, tid, *list(map(lambda x: round(x, 2), [x, y, s])), kid)
                             if run_mode == 'tracking':
