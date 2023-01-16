@@ -43,29 +43,50 @@ python tools/mc_demo_yolov7.py --mode tracking --source {path_to_video} --projec
 **Detection result**
 
 ```json
-[
-	{
-        "id": 1, 
-        "x1": 89.73, 
-        "y1": 272.25, 
-        "w": 127.05, 
-        "h": 345.38, 
+{
+    "1": { # bbox id
+        "x1": 89.73,
+        "y1": 272.25,
+        "w": 127.05,
+        "h": 345.38,
         "s": 0.91
-    }, 
-    {
-        ...
     },
-    ...
-]
+    "2": {
+        "x1": 194.0,
+        "y1": 271.12,
+        "w": 100.69,
+        "h": 355.5,
+        "s": 0.92
+    }
+}
 ```
 
 
 
 **Keypoint extraction result**
 
+```json
+{
+    "0": { # frame id
+        "1": { # track id
+            "x1": 196.78,
+            "y1": 264.36,
+            "w": 94.85,
+            "h": 368.44,
+            "s": 0.89
+        },
+        ..., 
+    },
+    ..., 
+}
+```
+
 
 
 **MOT result**
+
+```json
+```
 
 
 
