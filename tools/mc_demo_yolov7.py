@@ -20,6 +20,9 @@ from yolov7.utils.torch_utils import select_device, load_classifier, time_synchr
 from tracker.mc_bot_sort import BoTSORT
 from tracker.tracking_utils.timer import Timer
 
+import json
+import math
+
 sys.path.insert(0, './yolov7')
 sys.path.append('.')
 
@@ -27,13 +30,13 @@ sys.path.append('.')
 img_formats = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dng', 'webp', 'mpo']  # acceptable image suffixes
 vid_formats = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
 
+
 def write_results(filename, results):
     title = f'frame\tid\tx\ty\tw\th\ts\n'
     with open(filename, 'w') as f:
         f.write(title)
         f.write(''.join(results))
     print('Saved results to {}'.format(filename))
-
 
 def detect(save_img=False):
     ### Parsing arguments
@@ -58,8 +61,8 @@ def detect(save_img=False):
         exit(-1)
 
     # flag: display demo, flag: save result in txt, flag: save command in txt, image size for inference (resize), flag: trace model, flag: save keypoint labels
-    view_img, save_txt, save_cmd, imgsz, trace, kpt_label = (
-        opt.view_img, True, True, opt.img_size, opt.trace, (run_mode == 'tracking')
+    view_img, save_json, save_txt, save_cmd, imgsz, trace, kpt_label = (
+        opt.view_img, True, True, True, opt.img_size, opt.trace, (run_mode == 'tracking')
     )
     # 
     conf_thres, iou_thres, save_conf, classes, fuse_score, agnostic_nms, with_reid = (
@@ -149,9 +152,25 @@ def detect(save_img=False):
         model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
     # check inference time
     t0 = time.time()
+    # Keypoint and MOT result
+    kpt_result = {}
+    mot_result = {}
     # for each frame, 
     # video path, converted image, origin frame, video capture object
     for frame_id, (path, img, im0s, vid_cap) in enumerate(dataset):
+        # Process for every n sec
+        '''
+        For 22 sec/24 fps video, 
+        n = 0.1: 40~41 sec
+        n = 0.2: 20~21 sec
+        n = 0.5: 7~8 sec
+        n = 1.0: 3~4 sec
+        '''
+        n = 1.0
+        fps = int(vid_cap.get(cv2.CAP_PROP_FPS))
+        if frame_id % int(fps * n) != 0:
+            tracker.frame_id += 1
+            continue
         # to gpu
         img = torch.from_numpy(img).to(device)
         # uint8 to fp16/32
@@ -231,16 +250,26 @@ def detect(save_img=False):
 
                 # Save results of detection
                 if run_mode == 'detection':
+                    det_result = {}
                     # For each detection, 
                     for det_index, (*xyxy, conf, cls) in enumerate(reversed(detections[:, :6])):
+                        # normalized xywh
+                        xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist() 
+                        # label format
+                        x1, y1, x2, y2 = detections[det_index, :4]
+                        w, h = x2 - x1, y2 - y1
+                        s = conf
+                        # Save detection result
+                        if save_json:
+                            det_result[det_index + 1] = {
+                                    "x1": float(round(x1, 2)), 
+                                    "y1": float(round(y1, 2)), 
+                                    "w": float(round(w, 2)), 
+                                    "h": float(round(h, 2)), 
+                                    "s": float(round(s, 2)) 
+                            }
                         # Write to file
                         if save_txt: 
-                            # normalized xywh
-                            xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist() 
-                            # label format
-                            x1, y1, x2, y2 = detections[det_index, :4]
-                            w, h = x2 - x1, y2 - y1
-                            s = conf
                             det_line = (frame_id, det_index + 1, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
                             # save detection result
                             with open(det_path, 'a') as f:
@@ -260,6 +289,10 @@ def detect(save_img=False):
                                         nobbox=False)
                     # Save result image (image with detections)
                     p = Path(p)  # to Path
+                    save_path = str(save_dir / 'det_result.json')
+                    if save_json:
+                        with open(save_path, 'w') as f:
+                            json.dump(det_result, f, indent=4)
                     save_path = str(save_dir / p.name).split('.')[0] + '.jpg'  # img.jpg
                     if save_img:
                         cv2.imwrite(save_path, im0)
@@ -290,6 +323,8 @@ def detect(save_img=False):
             online_kpts = []
 
             # for each tracking
+            kpt_result[frame_id] = {}
+            mot_result[frame_id] = {}
             for ti, t in enumerate(online_targets):
                 tlwh = t.tlwh
                 tlbr = t.tlbr
@@ -297,6 +332,7 @@ def detect(save_img=False):
                 tid = t.track_id
                 tcls = t.cls
                 tkpts = t.kpts
+                kpt_result[frame_id][tid] = {}
                 # if area of bbox is bigger than min_box_area,
                 if tlwh[2] * tlwh[3] > opt.min_box_area:
                     # [t, l, w, h, id, score, class] for each online valid bboxes
@@ -315,6 +351,13 @@ def detect(save_img=False):
                     (x1, y1, w, h), s = tlwh[:4], t.score
                     mot_line = (frame_id, tid, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
                     if run_mode == 'tracking':
+                        mot_result[frame_id][tid] = {
+                            "x1": float(round(x1, 2)), 
+                            "y1": float(round(y1, 2)), 
+                            "w": float(round(w, 2)), 
+                            "h": float(round(h, 2)), 
+                            "s": float(round(s, 2)) 
+                        }
                         with open(mot_path, 'a') as f:
                             f.write(('%g ' * len(mot_line)).rstrip() % mot_line + '\n')
 
@@ -332,16 +375,24 @@ def detect(save_img=False):
                         # if x_coord % imgsz != 0 and y_coord % imgsz != 0:
                             conf = tkpt[k_step * kid + 2]
                             # dont save the keypoint if its score is less than kpt_thres
+                            '''
                             if conf < opt.kpt_thres:
                                 continue
+                            '''
                             x, y, s = x_coord, y_coord, conf
+                            kpt_result[frame_id][tid][kid] = {
+                                "x": float(round(x, 2)), 
+                                "y": float(round(y, 2)), 
+                                "s": float(round(s, 2))
+                            }
                             kpt_line = (frame_id, tid, *list(map(lambda x: round(x, 2), [x, y, s])), kid)
                             if run_mode == 'tracking':
                                 with open(kpt_path, 'a') as f:
                                     f.write(('%g ' * len(kpt_line)).rstrip() % kpt_line + '\n')
+                        
                     if run_mode == 'tracking':
-                            with open(kpt_path, 'a') as f:
-                                f.write('\n')
+                        with open(kpt_path, 'a') as f:
+                            f.write('\n')
 
                     # Add bbox and kpts to image
                     if save_img or view_img: 
@@ -386,7 +437,14 @@ def detect(save_img=False):
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
 
-
+    save_path = str(save_dir / 'kpt_result.json')
+    with open(save_path, 'w') as f:
+        json.dump(kpt_result, f, indent=4)
+    save_path = str(save_dir / 'mot_result.json')
+    with open(save_path, 'w') as f:
+        json.dump(mot_result, f, indent=4)
+    
+    
     print(f'Tracking done. ({time.time() - t0:.3f}s)')
     return
 
