@@ -9,11 +9,17 @@ _TBU_
 **Environment setup**
 
 * Use `my_requirements.yaml` file
-* NOTE) You need to install appropriate version of cuda(11.6), cudnn, and pytorch first
+* NOTE) You need to install appropriate version of cuda(11.6) and cudnn first
 * NOTE) If any problem occurs, please check [here](https://github.com/NirAharon/BoT-SORT#installation) for further information
 
 ```shell
 conda env create -f my_requirements.yaml
+```
+
+Then, run setup.py to setup environment.
+
+```shell
+python3 setup.py develop
 ```
 
 **Run model**
