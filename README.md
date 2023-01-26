@@ -22,9 +22,12 @@ Then, run `setup.py` to setup environment.
 python3 setup.py develop
 ```
 
+For last, create `pretrained` folder and download [yolov7.pt](https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7.pt) and [yolov7-w6-pose.pt](https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-w6-pose.pt) weight files in it. 
+
+
 **Run model**
 
-After you run the model, you can find the results at `{path_to_save_project}` directory 
+You can run **detection mode** and **tracking mode** using our model. 
 
 * Detection mode (Only detection for the first frame of the video)
 
@@ -37,6 +40,8 @@ python tools/mc_demo_yolov7.py --mode detection --source {path_to_video} --proje
 ```shell
 python tools/mc_demo_yolov7.py --mode tracking --source {path_to_video} --project {path_to_save_project}
 ```
+
+After you run the model, you can find the results at `{path_to_save_project}` directory 
 
 ## Result format
 
