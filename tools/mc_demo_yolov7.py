@@ -17,7 +17,8 @@ from yolov7.utils.general import check_img_size, check_requirements, check_imsho
 from yolov7.utils.plots import plot_one_box
 from yolov7.utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
 
-from tracker.mc_bot_sort import BoTSORT
+from tracker.tracking import BoTSORT
+# from tracker.mc_bot_sort import BoTSORT
 from tracker.tracking_utils.timer import Timer
 
 import json
@@ -97,9 +98,9 @@ def detect(save_img=False):
         mot_path = str(save_dir / 'mot_result.txt')
         kpt_path = str(save_dir / 'kpt_result.txt')
         with open(mot_path, 'w') as f:
-            f.write('Labels: (fid tid x1 y1 w h s)\n')
+            f.write('Labels: (sec tid x1 y1 w h s)\n')
         with open(kpt_path, 'w') as f:
-            f.write('Labels: (fid tid x y s kid)\n')
+            f.write('Labels: (sec tid x y s kid)\n')
 
     ### Initialize
     # set logging format
@@ -143,8 +144,9 @@ def detect(save_img=False):
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(100)]
 
     ### Create tracker
+    fps = int(cv2.VideoCapture(source).get(cv2.CAP_PROP_FPS))
     if run_mode == 'tracking':
-        tracker = BoTSORT(opt, frame_rate=30.0)
+        tracker = BoTSORT(opt, frame_rate=fps)
 
     ### Run inference
     # On gpu
@@ -157,6 +159,8 @@ def detect(save_img=False):
     mot_result = {}
     # for each frame, 
     # video path, converted image, origin frame, video capture object
+    n = 1
+    sec = -n
     for frame_id, (path, img, im0s, vid_cap) in enumerate(dataset):
         # Process for every n sec
         '''
@@ -166,11 +170,12 @@ def detect(save_img=False):
         n = 0.5: 7~8 sec
         n = 1.0: 3~4 sec
         '''
-        n = 1.0
-        fps = int(vid_cap.get(cv2.CAP_PROP_FPS))
+        # Skip non-checking frames
         if frame_id % int(fps * n) != 0:
             tracker.frame_id += 1
             continue
+        # Increase current second
+        sec += n
         # to gpu
         img = torch.from_numpy(img).to(device)
         # uint8 to fp16/32
@@ -270,7 +275,7 @@ def detect(save_img=False):
                             }
                         # Write to file
                         if save_txt: 
-                            det_line = (frame_id, det_index + 1, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
+                            det_line = (det_index + 1, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
                             # save detection result
                             with open(det_path, 'a') as f:
                                 f.write(('%g ' * len(det_line)).rstrip() % det_line+ '\n')
@@ -323,8 +328,8 @@ def detect(save_img=False):
             online_kpts = []
 
             # for each tracking
-            kpt_result[frame_id] = {}
-            mot_result[frame_id] = {}
+            kpt_result[sec] = {}
+            mot_result[sec] = {}
             for ti, t in enumerate(online_targets):
                 tlwh = t.tlwh
                 tlbr = t.tlbr
@@ -332,7 +337,7 @@ def detect(save_img=False):
                 tid = t.track_id
                 tcls = t.cls
                 tkpts = t.kpts
-                kpt_result[frame_id][tid] = {}
+                kpt_result[sec][tid] = {}
                 # if area of bbox is bigger than min_box_area,
                 if tlwh[2] * tlwh[3] > opt.min_box_area:
                     # [t, l, w, h, id, score, class] for each online valid bboxes
@@ -349,15 +354,15 @@ def detect(save_img=False):
 
                     # save mot result of current frame
                     (x1, y1, w, h), s = tlwh[:4], t.score
-                    mot_line = (frame_id, tid, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
                     if run_mode == 'tracking':
-                        mot_result[frame_id][tid] = {
+                        mot_result[sec][tid] = {
                             "x1": round(float(x1), 2), 
                             "y1": round(float(y1), 2), 
                             "w": round(float(w), 2), 
                             "h": round(float(h), 2), 
                             "s": round(float(s), 2) 
                         }
+                        mot_line = (sec, tid, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
                         with open(mot_path, 'a') as f:
                             f.write(('%g ' * len(mot_line)).rstrip() % mot_line + '\n')
 
@@ -380,12 +385,12 @@ def detect(save_img=False):
                                 continue
                             '''
                             x, y, s = x_coord, y_coord, conf
-                            kpt_result[frame_id][tid][kid] = {
+                            kpt_result[sec][tid][kid] = {
                                 "x": round(float(x), 2), 
                                 "y": round(float(y), 2), 
                                 "s": round(float(s), 2)
                             }
-                            kpt_line = (frame_id, tid, *list(map(lambda x: round(x, 2), [x, y, s])), kid)
+                            kpt_line = (sec, tid, *list(map(lambda x: round(x, 2), [x, y, s])), kid)
                             if run_mode == 'tracking':
                                 with open(kpt_path, 'a') as f:
                                     f.write(('%g ' * len(kpt_line)).rstrip() % kpt_line + '\n')
