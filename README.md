@@ -72,7 +72,7 @@ After you run the model, you can find the results at `{path_to_save_project}` di
 
 ```json
 {
-    "0": { # frame id
+    "0": { # second
         "1": { # track id
             "0": { # keypoint id
                 "x": 240.27,
@@ -103,7 +103,7 @@ After you run the model, you can find the results at `{path_to_save_project}` di
 
 ```json
 {
-    "0": { # frame id
+    "0": { # second
         "1": { # track id
             "x1": 196.78,
             "y1": 264.36,
