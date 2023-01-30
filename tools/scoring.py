@@ -82,11 +82,11 @@ class PoseSimilarity():
         if method in ['simple', None]:
             score = 1 - distance
         elif method == 'sqrt':
-            score = sqrt(1 - distance, 2)
+            score = sqrt(1 - distance)
         elif method == 'log':
             score = max(-np.log(distance), 1.0)
         elif method == 'exp':
-            score = np.exp(-x), 1
+            score = np.exp(-distance), 1
         elif method == 'reciprocal':
             score = 1 / (1 + distance)
 
@@ -270,11 +270,11 @@ class MovementSimilarity():
         if method in ['simple', None]:
             score = 1 - distance
         elif method == 'sqrt':
-            score = sqrt(1 - distance, 2)
+            score = sqrt(1 - distance)
         elif method == 'log':
             score = max(-np.log(distance), 1.0)
         elif method == 'exp':
-            score = np.exp(-x), 1
+            score = np.exp(-distance), 1
         elif method == 'reciprocal':
             score = 1 / (1 + distance)
 
