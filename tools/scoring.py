@@ -391,7 +391,7 @@ if __name__ == '__main__':
         with open(opt.track2, 'r') as f:
             track2 = json.load(f)
         movement_similarity = MovementSimilarity(track1, track2)
-        movement_scores = movement_similarity.calculate_score()
+        movement_scores = movement_similarity.calculate_score(distance=opt.distance, score=opt.score)
         print('[Movement score]')
         print()
         for track_id, movement_score in movement_scores.items():
