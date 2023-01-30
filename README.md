@@ -2,7 +2,23 @@
 
 ## Introduction
 
-_TBU_ 
+### Git Commit Convention
+
+**[DEV]**: 현재 개발 중인 코드에 대한 커밋
+
+**[FEAT]**: 기능 구현이 완료된 개발 코드
+
+**[BUGFIX]**: 에러 수정
+
+**[REFACT]**: 오타 수정을 했거나 알아보기 쉽게 코드를 정리한 커밋
+
+**[DATA]**: dataset 추가 혹은 수정
+
+**[DOCS]**: 문서(documentation) 수정 (README 등)
+
+**\[EXT]**:  그 외 기타 등등
+
+
 
 ## NOTE) How to use?
 
