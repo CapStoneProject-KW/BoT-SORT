@@ -66,8 +66,8 @@ def detect(save_img=False):
         opt.view_img, True, True, True, opt.img_size, opt.trace, (run_mode == 'tracking')
     )
     # 
-    conf_thres, iou_thres, save_conf, classes, fuse_score, agnostic_nms, with_reid = (
-        opt.conf_thres, opt.iou_thres, True, [0], True, True, True
+    conf_thres, iou_thres, save_conf, classes, fuse_score, agnostic_nms = (
+        opt.conf_thres, opt.iou_thres, True, [0], True, True
     )
     '''
     # video path, model weight path, flag: display demo, flag: save result in txt, flag: save command in txt, image size for inference (resize), flag: trace model
@@ -146,11 +146,11 @@ def detect(save_img=False):
     ### Create tracker
     fps = int(cv2.VideoCapture(source).get(cv2.CAP_PROP_FPS))
     if run_mode == 'tracking':
-        opt.with_reid = with_reid # True
+        opt.with_reid = True # False
         # thresh: the lower, the robuster (distance)
         opt.proximity_thresh = 0.5 # 0.5
         opt.appearance_thresh = 0.25 # 0.25
-        opt.match_thresh = 0.7 # 0.7
+        opt.match_thresh = 1.0 # 0.7
         tracker = BoTSORT(opt, frame_rate=fps)
 
     ### Run inference
