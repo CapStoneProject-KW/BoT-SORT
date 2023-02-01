@@ -146,6 +146,11 @@ def detect(save_img=False):
     ### Create tracker
     fps = int(cv2.VideoCapture(source).get(cv2.CAP_PROP_FPS))
     if run_mode == 'tracking':
+        opt.with_reid = with_reid # True
+        # thresh: the lower, the robuster (distance)
+        opt.proximity_thresh = 0.5 # 0.5
+        opt.appearance_thresh = 0.25 # 0.25
+        opt.match_thresh = 0.7 # 0.7
         tracker = BoTSORT(opt, frame_rate=fps)
 
     ### Run inference
@@ -369,7 +374,9 @@ def detect(save_img=False):
                     # save keypoint extraction result of current frame
                     # tkpts: dict = {0: [t, l, b, r, s, c, x0, y0, s1, x1, y1, s1, ...], 1: [...], ...}
                     if frame_id in tkpts:
-                        tkpt = tkpts[frame_id][6:]
+                        tkpt = tkpts[frame_id]
+                        # print(len(tkpt))
+                        # print(tkpt)
                     else:
                         continue
                     k_step = 3

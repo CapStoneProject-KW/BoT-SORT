@@ -36,7 +36,7 @@ class STrack(BaseTrack):
         self.features = deque([], maxlen=feat_history)
         self.alpha = 0.9
 
-        self.kpts = {frame_id: kpt} # int, list (shape: (17, 2))
+        self.kpts = {frame_id: kpt} # int, list (shape: (17, 3))
 
     def update_kpts(self, kpts: dict):
         # TODO: update frame keypoints
@@ -246,12 +246,10 @@ class BoTSORT(object):
     def __init__(self, args, frame_rate=30):
         
         ### Tracker
-        # on tracking
-        self.tracked_stracks = []  # type: list[STrack]
-        # considered lost
-        self.lost_stracks = []  # type: list[STrack]
-        # considered gone
-        self.removed_stracks = []  # type: list[STrack]
+        # existing track pool
+        self.strack_pool = []  # type: list[STrack]
+        # losted tracks
+        self.lost_stracks = []
 
         BaseTrack.clear_count()
 
@@ -292,14 +290,10 @@ class BoTSORT(object):
         '''
         # frame id
         self.frame_id += 1
-        # on tracking
+        # status: tracked -> tracked
         activated_stracks = []
-        # refound 
+        # status: untracked -> tracked
         refind_stracks = []
-        # lost
-        lost_stracks = []
-        # gone
-        removed_stracks = []
 
         # Fix total object count to object count in initial detection
         if self.frame_id == 0:
@@ -309,7 +303,7 @@ class BoTSORT(object):
         if len(output_results):
             # x, y, w, h
             bboxes = output_results[:, :4]
-            dets = output_REsults[:, :4]
+            dets = output_results[:, :4]
             # confidence score
             scores = output_results[:, 4]
             # class
@@ -321,34 +315,123 @@ class BoTSORT(object):
         # no detection
         else:
             bboxes = []
+            dets = []
             scores = []
             classes = []
-            dets = []
-            scores_keep = []
-            classes_keep = []
-            kpts_keep = []
-            features_inds = []
+            kpts = []
+            features = []
 
-        '''Extract embeddings '''
-        # extracted features for high conf bboxes with ReID module
+        ''' 1. Extract embeddings of detected objects '''
+        # extracted features for detected bboxes with ReID module
         if self.args.with_reid:
             features = self.encoder.inference(img, dets)
-        # high conf bboxes
-        if len(dets) > 0:
-            '''Detections'''
-            # detections = [STrack(x, y, w, h, score, class, features), ...]
+        # STracks of detected bboxes
+        detected_stracks = []
+        for tlbr, s, c, k, f in zip(dets, scores, classes, kpts, features):
             if self.args.with_reid:
-                detections = [STrack(self.frame_id, STrack.tlbr_to_tlwh(tlbr), s, c, k, f) for
-                              (tlbr, s, c, k, f) in zip(dets, scores, classes, kpts, features)]
+                track = STrack(self.frame_id, STrack.tlbr_to_tlwh(tlbr), s, c, k, f)
             else:
-                detections = [STrack(self.frame_id, STrack.tlbr_to_tlwh(tlbr), s, c, k) for
-                              (tlbr, s, c, k) in zip(dets, scores, classes, kpts)]
+                track = STrack(self.frame_id, STrack.tlbr_to_tlwh(tlbr), s, c, k)
+            if self.frame_id == 0:
+                track.activate(self.kalman_filter, self.frame_id)
+                self.strack_pool.append(track)
+            detected_stracks.append(track)
+
+        print()
+        print(f'Frame {self.frame_id}')
+        
+        print('detected_stracks')
+        print(detected_stracks)
+
+        ''' 2. Get activated/non-activated tracks from track pool '''
+        unconfirmed_stracks = []
+        # stracks for current frame
+        tracked_stracks = [] # type: list[STrack]
+        # existing track pool
+        for track in self.strack_pool:
+            # deactivated tracks
+            if not track.is_activated:
+                unconfirmed_stracks.append(track)
+            # activated tracks
+            else:
+                tracked_stracks.append(track)
+
+        ''' 3. Match track pool with tracks of current frame '''
+        # Predict the current location with KF
+        print('self.strack_pool')
+        print(self.strack_pool)
+
+        STrack.multi_predict(self.strack_pool)
+        # Fix camera motion
+        warp = self.gmc.apply(img, dets)
+        STrack.multi_gmc(self.strack_pool, warp)
+        STrack.multi_gmc(unconfirmed_stracks, warp)
+        # Associate track pool with detection boxes
+        ious_dists = matching.iou_distance(self.strack_pool, detected_stracks)
+        ious_dists_mask = (ious_dists > self.proximity_thresh)
+
+        print('ious_dists')
+        print(ious_dists)
+        print('ious_dists_mask')
+        print(ious_dists_mask)
+
+        if not self.args.mot20:
+            ious_dists = matching.fuse_score(ious_dists, detected_stracks)
+        if self.args.with_reid:
+            emb_dists = matching.embedding_distance(self.strack_pool, detected_stracks) / 2.0
+            print('emb_dists')
+            print(emb_dists)
+            raw_emb_dists = emb_dists.copy()
+            emb_dists[emb_dists > self.appearance_thresh] = 1.0
+            emb_dists[ious_dists_mask] = 1.0
+            dists = np.minimum(ious_dists, emb_dists)
+            print('emb_dists')
+            print(emb_dists)
         else:
-            detections = []
+            dists = ious_dists
+        # a-b cost matrix -> matches, unmatched_a, unmatched_b 
+        print('dists')
+        print(dists)
+        matches, u_track, u_detection = matching.linear_assignment(dists, thresh=self.args.match_thresh) 
+        
+        print('matches, u_track, u_detection')
+        print(matches, u_track, u_detection)
+        # if self.frame_id > 100:
+        #     exit(0)
+        ''' 4. Update values of track pool '''
+        for itracked, idet in matches:
+            # matched tracks
+            track = self.strack_pool[itracked]
+            # matched detections
+            det = detected_stracks[idet]
+            # update matched tracks using detections of current frame
+            if track.state == TrackState.Tracked:
+                track.update(detected_stracks[idet], self.frame_id)
+                # the track was activated in advance
+                activated_stracks.append(track)
+            else:
+                track.re_activate(det, self.frame_id, new_id=False)
+                # the track wasn't activated
+                refind_stracks.append(track)
+
+        ''' 5. Merge strack pool and return '''
+        # self.tracked_stracks = [t for t in self.tracked_stracks if t.state == TrackState.Tracked]
+        # self.tracked_stracks = joint_stracks(self.frame_id, self.tracked_stracks, activated_stracks, 'call from 2')
+        # self.tracked_stracks = joint_stracks(self.frame_id, self.tracked_stracks, refind_stracks, 'call from 3')
+
+        output_stracks = [track for track in self.strack_pool]
+
+        print('output_stracks')
+        print(output_stracks)
+        
+        return output_stracks
+
+
+        """ Deprecated
 
         ''' Step 1: Add newly detected tracklets to tracked_stracks'''
         unconfirmed = []
-        # tracked_stracks: stracks for current frame
+        # tracked_stracks: activated tracks in previous frame
         tracked_stracks = []  # type: list[STrack]
         # self.tracked_stracks: existing stracks
         for track in self.tracked_stracks:
@@ -469,7 +552,7 @@ class BoTSORT(object):
             track.mark_removed()
             removed_stracks.append(track)
 
-        """ Step 4: Init new stracks"""
+        ''' Step 4: Init new stracks '''
         for inew in u_detection:
             track = detections[inew]
             if track.score < self.new_track_thresh:
@@ -478,13 +561,13 @@ class BoTSORT(object):
             track.activate(self.kalman_filter, self.frame_id)
             activated_stracks.append(track)
 
-        """ Step 5: Update state"""
+        ''' Step 5: Update state '''
         for track in self.lost_stracks:
             if self.frame_id - track.end_frame > self.max_time_lost:
                 track.mark_removed()
                 removed_stracks.append(track)
 
-        """ Merge """
+        ''' Merge '''
         self.tracked_stracks = [t for t in self.tracked_stracks if t.state == TrackState.Tracked]
         self.tracked_stracks = joint_stracks(self.frame_id, self.tracked_stracks, activated_stracks, 'call from 2')
         self.tracked_stracks = joint_stracks(self.frame_id, self.tracked_stracks, refind_stracks, 'call from 3')
@@ -506,6 +589,8 @@ class BoTSORT(object):
         
 
         return output_stracks
+
+        """
 
 # merge two strack lists
 def joint_stracks(frame_id, tlista, tlistb, s):
