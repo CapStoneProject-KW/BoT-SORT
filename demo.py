@@ -3,20 +3,20 @@ if __name__ == '__main__':
     from server.scoring import run_scoring
     import pprint
 
-    mode = 'tracking' # 'detection' or 'tracking'
+    mode = 'detection' # 'detection' or 'tracking'
     data_path_answer = './datasets/last_dance/single_person/youtube_video.mp4'
     data_path_user = './datasets/last_dance/single_person/user_video.mp4' # Path to video
     ckpt_path = './pretrained/yolov7.pt' if mode == 'detection' \
                     else './pretrained/yolov7-w6-pose.pt' # Path to model weight file
     
     if mode == 'detection':
-        det_result_answer = run_model(mode, data_path_user, ckpt_path)
+        det_result_answer = run_model(mode, data_path_answer, ckpt_path)
         det_result_user = run_model(mode, data_path_user, ckpt_path)
         print('[Detection Result]')
         print('Answer Video')
-        pprint.pprint(det_result_user)
-        print('User Video')
         pprint.pprint(det_result_answer)
+        print('User Video')
+        pprint.pprint(det_result_user)
     elif mode == 'tracking':
         kpt_result_answer, mot_result_answer = run_model(mode, 
                                                     data_path_answer, 
