@@ -170,6 +170,9 @@ class MovementSimilarity():
             movement_score_sum = 0
             valid_frame = 0
 
+            if track_id not in bboxes_dict2:
+                continue
+
             frame_keys_dict1 = sorted(bboxes_dict1[track_id].keys())
             frame_keys_dict2 = sorted(bboxes_dict2[track_id].keys())
 
