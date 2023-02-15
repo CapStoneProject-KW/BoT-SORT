@@ -337,11 +337,11 @@ class BoTSORT(object):
                 self.strack_pool.append(track)
             detected_stracks.append(track)
 
-        print()
-        print(f'Frame {self.frame_id}')
+        # print()
+        # print(f'Frame {self.frame_id}')
         
-        print('detected_stracks')
-        print(detected_stracks)
+        # print('detected_stracks')
+        # print(detected_stracks)
 
         ''' 2. Get activated/non-activated tracks from track pool '''
         unconfirmed_stracks = []
@@ -358,8 +358,8 @@ class BoTSORT(object):
 
         ''' 3. Match track pool with tracks of current frame '''
         # Predict the current location with KF
-        print('self.strack_pool')
-        print(self.strack_pool)
+        # print('self.strack_pool')
+        # print(self.strack_pool)
 
         STrack.multi_predict(self.strack_pool)
         # Fix camera motion
@@ -370,32 +370,32 @@ class BoTSORT(object):
         ious_dists = matching.iou_distance(self.strack_pool, detected_stracks)
         ious_dists_mask = (ious_dists > self.proximity_thresh)
 
-        print('ious_dists')
-        print(ious_dists)
-        print('ious_dists_mask')
-        print(ious_dists_mask)
+        # print('ious_dists')
+        # print(ious_dists)
+        # print('ious_dists_mask')
+        # print(ious_dists_mask)
 
         if not self.args.mot20:
             ious_dists = matching.fuse_score(ious_dists, detected_stracks)
         if self.args.with_reid:
             emb_dists = matching.embedding_distance(self.strack_pool, detected_stracks) / 2.0
-            print('emb_dists')
-            print(emb_dists)
+            # print('emb_dists')
+            # print(emb_dists)
             raw_emb_dists = emb_dists.copy()
             emb_dists[emb_dists > self.appearance_thresh] = 1.0
             emb_dists[ious_dists_mask] = 1.0
             dists = np.minimum(ious_dists, emb_dists)
-            print('emb_dists')
-            print(emb_dists)
+            # print('emb_dists')
+            # print(emb_dists)
         else:
             dists = ious_dists
         # a-b cost matrix -> matches, unmatched_a, unmatched_b 
-        print('dists')
-        print(dists)
+        # print('dists')
+        # print(dists)
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=self.args.match_thresh) 
         
-        print('matches, u_track, u_detection')
-        print(matches, u_track, u_detection)
+        # print('matches, u_track, u_detection')
+        # print(matches, u_track, u_detection)
         # if self.frame_id > 100:
         #     exit(0)
         ''' 4. Update values of track pool '''
@@ -421,8 +421,8 @@ class BoTSORT(object):
 
         output_stracks = [track for track in self.strack_pool]
 
-        print('output_stracks')
-        print(output_stracks)
+        # print('output_stracks')
+        # print(output_stracks)
         
         return output_stracks
 

@@ -217,8 +217,8 @@ class MovementSimilarity():
 
                 # bbox normalization
                 if bbox_vector_xy1 == [] or bbox_vector_xy2 == []:
-                    print('track:', track_id)
-                    print('frame:', frame_id)
+                    # print('track:', track_id)
+                    # print('frame:', frame_id)
                     continue
 
                 bbox_vector_xy1 = self._scaling_coordinate(bbox_vector_xy1, bbox_vector_wh1)
