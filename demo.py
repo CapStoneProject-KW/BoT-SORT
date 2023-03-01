@@ -4,26 +4,22 @@ if __name__ == '__main__':
     import pprint
 
     mode = 'tracking' # 'detection' or 'tracking'
-    data_path_answer = './datasets/last_dance/single_person/youtube_video.mp4'
-    data_path_user = './datasets/last_dance/single_person/user_video.mp4' # Path to video
-    ckpt_path = './pretrained/yolov7.pt' if mode == 'detection' \
-                    else './pretrained/yolov7-w6-pose.pt' # Path to model weight file
+    data_path_answer = './datasets/last_dance/antifragile/answer.mp4'
+    data_path_user = './datasets/last_dance/antifragile/user_sync.mp4' # Path to video
     
     if mode == 'detection':
-        det_result_answer = run_model(mode, data_path_user, ckpt_path)
-        det_result_user = run_model(mode, data_path_user, ckpt_path)
+        det_image_answer, det_result_answer = run_model(mode, data_path_answer)
+        # print(type(det_image_answer), det_image_answer)
+        det_image_user, det_result_user = run_model(mode, data_path_user)
+        # print(type(det_image_user), det_image_user)
         print('[Detection Result]')
         print('Answer Video')
-        pprint.pprint(det_result_user)
-        print('User Video')
         pprint.pprint(det_result_answer)
+        print('User Video')
+        pprint.pprint(det_result_user)
     elif mode == 'tracking':
-        kpt_result_answer, mot_result_answer = run_model(mode, 
-                                                    data_path_answer, 
-                                                    ckpt_path)
-        kpt_result_user, mot_result_user = run_model(mode, 
-                                                    data_path_user, 
-                                                    ckpt_path)
+        kpt_result_answer, mot_result_answer = run_model(mode, data_path_answer)
+        kpt_result_user, mot_result_user = run_model(mode, data_path_user)
         print('[Keypoint Result]')
         print('Answer Video')
         pprint.pprint(kpt_result_answer)
@@ -31,19 +27,26 @@ if __name__ == '__main__':
         pprint.pprint(kpt_result_user)
         print('[Tracking Result]')
         print('Answer Video')
-        pprint.pprint(mot_result_answer)
+        # pprint.pprint(mot_result_answer)
+        print(mot_result_answer[10])
+        print(mot_result_answer[100])
         print('User Video')
-        pprint.pprint(mot_result_user)
+        # pprint.pprint(mot_result_user)
+        print(mot_result_user[10])
+        print(mot_result_user[100])
 
+        matches = [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]
         pose_scores = run_scoring('pose', 
-                                kpt_result_answer, 
                                 kpt_result_user, 
-                                distance='weighted', 
+                                kpt_result_answer, 
+                                matches=matches,
+                                distance='euclidean', 
                                 score='simple')
         movement_scores = run_scoring('movement', 
-                                mot_result_answer, 
                                 mot_result_user, 
-                                distance='weighted', 
+                                mot_result_answer, 
+                                matches=matches,
+                                distance='euclidean', 
                                 score='simple')
         print('[Pose Score]')
         for track_id, score in pose_scores.items():

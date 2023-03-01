@@ -37,6 +37,7 @@ def get_opt():
     parser = argparse.ArgumentParser()
     
     # parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)') #
+    # parser.add_argument('--ckpt-path', nargs='+', type=str, default='pretrained/yolov7.pt', help='model.pt path(s)')
     # parser.add_argument('--source', type=str, default='inference/images', help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     print("hihddddi")
@@ -155,7 +156,7 @@ def get_opt():
 
     return opt
 
-def detect(mode, data_path, ckpt_path, save_img=False):
+def detect(mode, data_path, save_img=False):
     """
     Descripiton:
     Args:
@@ -164,13 +165,12 @@ def detect(mode, data_path, ckpt_path, save_img=False):
     ### Assertion
     assert mode in ['detection', 'tracking'], f'ERROR: Invalid mode {mode} designated'
     assert os.path.exists(data_path), f'ERROR: Invalid data path {data_path} designated'
-    assert os.path.exists(ckpt_path), f'ERROR: Invalid ckpt path {ckpt_path} designated'
     
     ### Parsing arguments
     opt = get_opt()
     run_mode = mode
     source = data_path
-    weights = ckpt_path
+    weights = 'pretrained/yolov7.pt' if mode == 'detection' else 'pretrained/yolov7-w6-pose.pt'
     src_format = source.split('.')[-1]
 
     # detection mode
@@ -343,15 +343,15 @@ def detect(mode, data_path, ckpt_path, save_img=False):
                         # Save detection result
                         if save_json:
                             det_result[det_index + 1] = {
-                                    "x1": round(float(x1), 2), 
-                                    "y1": round(float(y1), 2), 
-                                    "w": round(float(w), 2), 
-                                    "h": round(float(h), 2), 
-                                    "s": round(float(s), 2) 
+                                    "x1": round(float(x1), 4), 
+                                    "y1": round(float(y1), 4), 
+                                    "w": round(float(w), 4), 
+                                    "h": round(float(h), 4), 
+                                    "s": round(float(s), 4) 
                             }
                         # Write to file
                         if save_txt: 
-                            det_line = (det_index + 1, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
+                            det_line = (det_index + 1, *list(map(lambda x: round(x, 4), [x1, y1, w, h, s])))
                             # save detection result
                             with open(det_path, 'a') as f:
                                 f.write(('%g ' * len(det_line)).rstrip() % det_line+ '\n')
@@ -373,7 +373,7 @@ def detect(mode, data_path, ckpt_path, save_img=False):
                     # save_path = str(save_dir / p.name).split('.')[0] + '.jpg'  # img.jpg
                     # cv2.imwrite(save_path, im0)
                     print(f'Detection done. ({time.time() - t0:.3f}s)')
-                    return det_result
+                    return im0, det_result
                     # Save json file
                     # p = Path(p)  # to Path
                     # save_path = str(save_dir / 'det_result.json')
@@ -431,14 +431,14 @@ def detect(mode, data_path, ckpt_path, save_img=False):
                     (x1, y1, w, h), s = tlwh[:4], t.score
                     if save_json:
                         mot_result[sec][tid] = {
-                            "x1": round(float(x1), 2), 
-                            "y1": round(float(y1), 2), 
-                            "w": round(float(w), 2), 
-                            "h": round(float(h), 2), 
-                            "s": round(float(s), 2) 
+                            "x1": round(float(x1), 4), 
+                            "y1": round(float(y1), 4), 
+                            "w": round(float(w), 4), 
+                            "h": round(float(h), 4), 
+                            "s": round(float(s), 4) 
                         }
                     if save_txt:
-                        mot_line = (sec, tid, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
+                        mot_line = (sec, tid, *list(map(lambda x: round(x, 4), [x1, y1, w, h, s])))
                         with open(mot_path, 'a') as f:
                             f.write(('%g ' * len(mot_line)).rstrip() % mot_line + '\n')
 
@@ -457,12 +457,12 @@ def detect(mode, data_path, ckpt_path, save_img=False):
                                 conf = tkpt[k_step * kid + 2]
                                 x, y, s = x_coord, y_coord, conf
                                 kpt_result[sec][tid][kid] = {
-                                    "x": round(float(x), 2), 
-                                    "y": round(float(y), 2), 
-                                    "s": round(float(s), 2)
+                                    "x": round(float(x), 4), 
+                                    "y": round(float(y), 4), 
+                                    "s": round(float(s), 4)
                                 }
                             if save_txt:
-                                kpt_line = (sec, tid, *list(map(lambda x: round(x, 2), [x, y, s])), kid)
+                                kpt_line = (sec, tid, *list(map(lambda x: round(x, 4), [x, y, s])), kid)
                                 with open(kpt_path, 'a') as f:
                                     f.write(('%g ' * len(kpt_line)).rstrip() % kpt_line + '\n')
                         
@@ -525,6 +525,6 @@ def detect(mode, data_path, ckpt_path, save_img=False):
     #     json.dump(mot_result, f, indent=4)
 
 
-def run_model(mode, data_path, ckpt_path):
+def run_model(mode, data_path):
     with torch.no_grad():
-        return detect(mode, data_path, ckpt_path)
+        return detect(mode, data_path)
