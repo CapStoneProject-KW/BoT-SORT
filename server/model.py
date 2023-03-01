@@ -33,7 +33,7 @@ vid_formats = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # accep
 
 def get_opt():
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)') #
+    # parser.add_argument('--ckpt-path', nargs='+', type=str, default='pretrained/yolov7.pt', help='model.pt path(s)')
     # parser.add_argument('--source', type=str, default='inference/images', help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold') #
@@ -99,7 +99,7 @@ def get_opt():
 
     return opt
 
-def detect(mode, data_path, ckpt_path, save_img=False):
+def detect(mode, data_path, save_img=False):
     """
     Descripiton:
     Args:
@@ -108,13 +108,12 @@ def detect(mode, data_path, ckpt_path, save_img=False):
     ### Assertion
     assert mode in ['detection', 'tracking'], f'ERROR: Invalid mode {mode} designated'
     assert os.path.exists(data_path), f'ERROR: Invalid data path {data_path} designated'
-    assert os.path.exists(ckpt_path), f'ERROR: Invalid ckpt path {ckpt_path} designated'
     
     ### Parsing arguments
     opt = get_opt()
     run_mode = mode
     source = data_path
-    weights = ckpt_path
+    weights = 'pretrained/yolov7.pt' if mode == 'detection' else 'pretrained/yolov7-w6-pose.pt'
     src_format = source.split('.')[-1]
 
     # detection mode
@@ -466,6 +465,6 @@ def detect(mode, data_path, ckpt_path, save_img=False):
     #     json.dump(mot_result, f, indent=4)
 
 
-def run_model(mode, data_path, ckpt_path):
+def run_model(mode, data_path):
     with torch.no_grad():
-        return detect(mode, data_path, ckpt_path)
+        return detect(mode, data_path)
