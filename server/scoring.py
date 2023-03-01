@@ -48,10 +48,10 @@ class PoseSimilarity():
                 except:
                     continue
                 # Keypoint normalization
-                if pose_vector_xy1 == [] or pose_vector_xy2 == []:
-                    print('track:', track_id)
-                    print('match:', match_id)
-                    print('frame:', frame_id)
+                if pose_vector_xy1 == [] or pose_vector_xy2 == [] or len(pose_vector_xy1) != len(pose_vector_xy2):
+                    # print('track:', track_id)
+                    # print('match:', match_id)
+                    # print('frame:', frame_id)
                     continue
                 pose_vector_xy1 = self._normalize_poses(pose_vector_xy1)
                 pose_vector_xy2 = self._normalize_poses(pose_vector_xy2)
@@ -184,6 +184,7 @@ class MovementSimilarity():
             frame_keys_dict1 = sorted(bboxes_dict1[track_id].keys())
             match_id = self.matches[track_id]
             frame_keys_dict2 = sorted(bboxes_dict2[match_id].keys())
+            # print(frame_keys_dict1, frame_keys_dict2)
 
             # for i in range(len(frame_keys_dict1)):
             #     x1, y1 = normalized_video_A[keys_video_A[i]]
@@ -228,7 +229,8 @@ class MovementSimilarity():
                     continue
 
                 # bbox normalization
-                if bbox_vector_xy1 == [] or bbox_vector_xy2 == []:
+                if bbox_vector_xy1 == [] or bbox_vector_xy2 == [] or len(bbox_vector_xy1) != len(bbox_vector_xy1) \
+                    or next_bbox_vector_xy1 == [] or next_bbox_vector_xy2 == [] or len(next_bbox_vector_xy1) != len(next_bbox_vector_xy1):
                     # print('track:', track_id)
                     # print('frame:', frame_id)
                     continue
@@ -239,8 +241,8 @@ class MovementSimilarity():
                 bbox_vector_xy2 = self._scaling_coordinate(bbox_vector_xy2, bbox_vector_wh2)
                 next_bbox_vector_xy2 = self._scaling_coordinate(next_bbox_vector_xy2, next_bbox_vector_wh2)
 
-                #print(bbox_vector_xy1, next_bbox_vector_xy1) # [1.6976618898825557, 0.5579220779220779] [1.3762291169451073, 0.5418694551825792]
-                #print(bbox_vector_xy2, next_bbox_vector_xy2) # [1.6976618898825557, 0.5579220779220779] [1.3762291169451073, 0.5418694551825792]
+                # print(bbox_vector_xy1, next_bbox_vector_xy1) # [1.6976618898825557, 0.5579220779220779] [1.3762291169451073, 0.5418694551825792]
+                # print(bbox_vector_xy2, next_bbox_vector_xy2) # [1.6976618898825557, 0.5579220779220779] [1.3762291169451073, 0.5418694551825792]
 
                 # Calcuate the difference between (n)th frame and (n+1)th frame
                 differences_bbox_vector_xy1 = [next_bbox_vector_xy1[0] - bbox_vector_xy1[0], next_bbox_vector_xy1[1] - bbox_vector_xy1[1]]

@@ -286,15 +286,15 @@ def detect(mode, data_path, save_img=False):
                         # Save detection result
                         if save_json:
                             det_result[det_index + 1] = {
-                                    "x1": round(float(x1), 2), 
-                                    "y1": round(float(y1), 2), 
-                                    "w": round(float(w), 2), 
-                                    "h": round(float(h), 2), 
-                                    "s": round(float(s), 2) 
+                                    "x1": round(float(x1), 4), 
+                                    "y1": round(float(y1), 4), 
+                                    "w": round(float(w), 4), 
+                                    "h": round(float(h), 4), 
+                                    "s": round(float(s), 4) 
                             }
                         # Write to file
                         if save_txt: 
-                            det_line = (det_index + 1, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
+                            det_line = (det_index + 1, *list(map(lambda x: round(x, 4), [x1, y1, w, h, s])))
                             # save detection result
                             with open(det_path, 'a') as f:
                                 f.write(('%g ' * len(det_line)).rstrip() % det_line+ '\n')
@@ -371,14 +371,14 @@ def detect(mode, data_path, save_img=False):
                     (x1, y1, w, h), s = tlwh[:4], t.score
                     if save_json:
                         mot_result[sec][tid] = {
-                            "x1": round(float(x1), 2), 
-                            "y1": round(float(y1), 2), 
-                            "w": round(float(w), 2), 
-                            "h": round(float(h), 2), 
-                            "s": round(float(s), 2) 
+                            "x1": round(float(x1), 4), 
+                            "y1": round(float(y1), 4), 
+                            "w": round(float(w), 4), 
+                            "h": round(float(h), 4), 
+                            "s": round(float(s), 4) 
                         }
                     if save_txt:
-                        mot_line = (sec, tid, *list(map(lambda x: round(x, 2), [x1, y1, w, h, s])))
+                        mot_line = (sec, tid, *list(map(lambda x: round(x, 4), [x1, y1, w, h, s])))
                         with open(mot_path, 'a') as f:
                             f.write(('%g ' * len(mot_line)).rstrip() % mot_line + '\n')
 
@@ -397,12 +397,12 @@ def detect(mode, data_path, save_img=False):
                                 conf = tkpt[k_step * kid + 2]
                                 x, y, s = x_coord, y_coord, conf
                                 kpt_result[sec][tid][kid] = {
-                                    "x": round(float(x), 2), 
-                                    "y": round(float(y), 2), 
-                                    "s": round(float(s), 2)
+                                    "x": round(float(x), 4), 
+                                    "y": round(float(y), 4), 
+                                    "s": round(float(s), 4)
                                 }
                             if save_txt:
-                                kpt_line = (sec, tid, *list(map(lambda x: round(x, 2), [x, y, s])), kid)
+                                kpt_line = (sec, tid, *list(map(lambda x: round(x, 4), [x, y, s])), kid)
                                 with open(kpt_path, 'a') as f:
                                     f.write(('%g ' * len(kpt_line)).rstrip() % kpt_line + '\n')
                         

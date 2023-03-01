@@ -27,22 +27,26 @@ if __name__ == '__main__':
         pprint.pprint(kpt_result_user)
         print('[Tracking Result]')
         print('Answer Video')
-        pprint.pprint(mot_result_answer)
+        # pprint.pprint(mot_result_answer)
+        print(mot_result_answer[10])
+        print(mot_result_answer[100])
         print('User Video')
-        pprint.pprint(mot_result_user)
+        # pprint.pprint(mot_result_user)
+        print(mot_result_user[10])
+        print(mot_result_user[100])
 
         matches = [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]
         pose_scores = run_scoring('pose', 
                                 kpt_result_user, 
                                 kpt_result_answer, 
                                 matches=matches,
-                                distance='weighted', 
+                                distance='euclidean', 
                                 score='simple')
         movement_scores = run_scoring('movement', 
                                 mot_result_user, 
                                 mot_result_answer, 
                                 matches=matches,
-                                distance='weighted', 
+                                distance='euclidean', 
                                 score='simple')
         print('[Pose Score]')
         for track_id, score in pose_scores.items():
