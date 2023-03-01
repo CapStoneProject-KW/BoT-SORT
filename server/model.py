@@ -17,9 +17,10 @@ from yolov7.utils.general import check_img_size, check_requirements, check_imsho
 from yolov7.utils.plots import plot_one_box
 from yolov7.utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
 
-from tracker.tracking import BoTSORT
-# from tracker.mc_bot_sort import BoTSORT
+# from tracker.tracking import BoTSORT
+from tracker.mc_bot_sort import BoTSORT
 from tracker.tracking_utils.timer import Timer
+import easydict
 
 import json
 import math
@@ -32,10 +33,13 @@ img_formats = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dng', 'webp', 'mpo']
 vid_formats = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
 
 def get_opt():
+    '''
     parser = argparse.ArgumentParser()
+    
     # parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)') #
     # parser.add_argument('--source', type=str, default='inference/images', help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
+    print("hihddddi")
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold') #
     parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS') #
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
@@ -91,11 +95,63 @@ def get_opt():
 
     # run mode
     parser.add_argument('--mode', type=str, default=None, help='run mode of model', choices=['detection', 'tracking'])
+    '''
 
-    opt = parser.parse_args()
+    opt = easydict.EasyDict({
+        "img_size": 640,
+        "conf_thres" : 0.25,
+        "iou_thres" : 0.45,
+        "device" : '',
+        "view_img" : False,
+        "save_txt" : False,
+        "save_conf" :False,
+        "save_cmd" : False,
+        "nosave": False,
+        # "classes": False,
+        "agnostic_nms": False,
+        "augment": False,
+        "update": False,
+        "project": 'runs/detect',
+        "name": 'exp',
+        "exist_ok": False,
+        "trace": False,
+        "hide_labels_name": False,
+        "cmc_method": 'sparseOptFlow',
+        "hide_labels_name": False,
+        "with_reid": 'with_reid',
+        "fast_reid_config": "fast_reid/configs/MOT17/sbs_S50.yml",
+        "fast_reid_weights": "pretrained/mot17_sbs_S50.pth",
+        "proximity_thresh": 0.5,
+        "appearance_thresh": 0.25,
+        "hide_labels": False,
+        "hide_conf": False,
+        "kpt_thres": 0.5,
+        "kpt_label": False,
+        "nobbox": False,
+        "mode": None,
+        "jde": False,
+        "ablation": False,
+        "track_high_thresh": 0.3,
+        "track_low_thresh": 0.05,
+        "new_track_thresh": 0.4,
+        "track_buffer": 30,
+        "match_thresh": 0.7,
+        "aspect_ratio_thresh": 1.6,
+        "min_box_area": 10,
+        "fuse-score": False,
+        "mot20": False
+        # "ablation": False,
+        # "ablation": False,
+        # "ablation": False,
+        # "ablation": False,
+    })
+    
+    #opt = parser.parse_args()
 
-    opt.jde = False
-    opt.ablation = False
+    # opt.jde = False
+    # opt.ablation = False
+
+    print(opt)
 
     return opt
 
@@ -150,8 +206,8 @@ def detect(mode, data_path, ckpt_path, save_img=False):
 
     ### Making directories (No saving)
     # directory path for saving experiment (increment run)
-    # save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))
-    # save_dir.mkdir(parents=True, exist_ok=True)
+    save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))
+    save_dir.mkdir(parents=True, exist_ok=True)
 
     ### Initialize
     # set logging format
@@ -313,6 +369,9 @@ def detect(mode, data_path, ckpt_path, save_img=False):
                                         orig_shape=im0.shape[:2],
                                         nobbox=False)
                     # Return detection result
+                    # p = Path(p)  # to Path
+                    # save_path = str(save_dir / p.name).split('.')[0] + '.jpg'  # img.jpg
+                    # cv2.imwrite(save_path, im0)
                     print(f'Detection done. ({time.time() - t0:.3f}s)')
                     return det_result
                     # Save json file
