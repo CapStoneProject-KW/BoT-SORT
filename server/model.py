@@ -313,7 +313,7 @@ def detect(mode, data_path, save_img=False):
                                         nobbox=False)
                     # Return detection result
                     print(f'Detection done. ({time.time() - t0:.3f}s)')
-                    return det_result
+                    return im0, det_result
                     # Save json file
                     # p = Path(p)  # to Path
                     # save_path = str(save_dir / 'det_result.json')

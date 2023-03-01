@@ -7,9 +7,12 @@ from typing import Optional
 import json
 
 class PoseSimilarity():
-    def __init__(self, poses1: dict, poses2: dict):
-        self.pose_dict1 = poses1
-        self.pose_dict2 = poses2
+    def __init__(self, poses1: dict, poses2: dict, matches: list):
+        self.pose_dict1 = poses1 # user
+        self.pose_dict2 = poses2 # answer
+        self.matches = {}
+        for user_id, answer_id in matches:
+            self.matches[user_id] = answer_id
         self.similarity_scores = None
 
     def calculate_score(self, distance: Optional[str] = None, score: Optional[str] = None) -> dict:
@@ -39,13 +42,15 @@ class PoseSimilarity():
                 # 이걸 pose 2개에 대해 하고, 
                 # 각 frame의 similarity를 구해서
                 try:
-                    keypoints = pose_dict2[track_id][frame_id] # There could be non-existing or empty case
+                    match_id = self.matches[track_id]
+                    keypoints = pose_dict2[match_id][frame_id] # There could be non-existing or empty case
                     pose_vector_xy2, pose_vector_score2 = self._flatten_poses(keypoints)
                 except:
                     continue
                 # Keypoint normalization
                 if pose_vector_xy1 == [] or pose_vector_xy2 == []:
                     print('track:', track_id)
+                    print('match:', match_id)
                     print('frame:', frame_id)
                     continue
                 pose_vector_xy1 = self._normalize_poses(pose_vector_xy1)
@@ -59,7 +64,7 @@ class PoseSimilarity():
             # 모든 frame의 similarity 정보들을 이용해 해당 object의 score를 매긴다.
             if valid_frame == 0:
                 continue
-            print(pose_score_sum, valid_frame) 
+            # print(pose_score_sum, valid_frame) 
             pose_scores[track_id] = pose_score_sum / valid_frame
         # object scores 반환
         self.similarity_scores = pose_scores
@@ -143,9 +148,12 @@ class PoseSimilarity():
 
 
 class MovementSimilarity():
-    def __init__(self, bboxes1: dict, bboxes2: dict):
-        self.bboxes_dict1 = bboxes1
-        self.bboxes_dict2 = bboxes2
+    def __init__(self, bboxes1: dict, bboxes2: dict, matches: list):
+        self.bboxes_dict1 = bboxes1 # user
+        self.bboxes_dict2 = bboxes2 # answer
+        self.matches = {}
+        for user_id, answer_id in matches:
+            self.matches[user_id] = answer_id
         self.similarity_scores = None
 
     def calculate_score(self, distance: Optional[str] = None, score: Optional[str] = None) -> dict:
@@ -174,7 +182,8 @@ class MovementSimilarity():
                 continue
 
             frame_keys_dict1 = sorted(bboxes_dict1[track_id].keys())
-            frame_keys_dict2 = sorted(bboxes_dict2[track_id].keys())
+            match_id = self.matches[track_id]
+            frame_keys_dict2 = sorted(bboxes_dict2[match_id].keys())
 
             # for i in range(len(frame_keys_dict1)):
             #     x1, y1 = normalized_video_A[keys_video_A[i]]
@@ -211,7 +220,7 @@ class MovementSimilarity():
                 # 이걸 pose 2개에 대해 하고, 
                 # 각 frame의 similarity를 구해서
                 try:
-                    bbox = bboxes_dict2[track_id][frame_id] # There could be non-existing or empty case
+                    bbox = bboxes_dict2[match_id][frame_id] # There could be non-existing or empty case
                     
                     bbox_vector_xy2, bbox_vector_wh2, bbox_vector_score2 = self._flatten_bboxes(frames[frame_keys_dict2[i]])
                     next_bbox_vector_xy2, next_bbox_vector_wh2, next_bbox_vector_score2 = self._flatten_bboxes(frames[frame_keys_dict2[i+1]])
@@ -358,12 +367,13 @@ class MovementSimilarity():
         return bbox_vector_xy, bbox_vector_wh, bbox_vector_score
 
 
-def run_scoring(mode, dict1, dict2, distance=None, score=None):
+def run_scoring(mode, dict1, dict2, matches, distance=None, score=None):
 
+    matches = [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]
     if mode == 'pose':
-        similarity_obj = PoseSimilarity(dict1, dict2)
+        similarity_obj = PoseSimilarity(dict1, dict2, matches)
     elif mode == 'movement':
-        similarity_obj = MovementSimilarity(dict1, dict2)
+        similarity_obj = MovementSimilarity(dict1, dict2, matches)
 
     scores = similarity_obj.calculate_score(distance=distance, score=score)
     return scores
