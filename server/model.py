@@ -17,8 +17,8 @@ from yolov7.utils.general import check_img_size, check_requirements, check_imsho
 from yolov7.utils.plots import plot_one_box
 from yolov7.utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
 
-# from tracker.tracking import BoTSORT
-from tracker.mc_bot_sort import BoTSORT
+from tracker.tracking import BoTSORT
+# from tracker.mc_bot_sort import BoTSORT
 from tracker.tracking_utils.timer import Timer
 import easydict
 
@@ -173,6 +173,8 @@ def detect(mode, data_path, save_img=False):
     weights = 'pretrained/yolov7.pt' if mode == 'detection' else 'pretrained/yolov7-w6-pose.pt'
     src_format = source.split('.')[-1]
 
+
+    first_frame_img_path = '../runs/image.jpg'
     # detection mode
     if run_mode == 'detection':
         # it should be image or video
@@ -181,6 +183,7 @@ def detect(mode, data_path, save_img=False):
         assert weights.split('/')[-1] == 'yolov7.pt', 'ERROR: You must use "yolov7.pt" weight file'
         # dictionary for returning json file
         det_result = {}
+
     # tracking mode
     elif run_mode == 'tracking':
         # it must be a video
