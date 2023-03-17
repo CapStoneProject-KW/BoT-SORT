@@ -153,6 +153,8 @@ class MovementSimilarity():
         self.bboxes_dict2 = bboxes2 # answer
         self.matches = {}
         for user_id, answer_id in matches:
+            # print(type(user_id), type(answer_id))
+            user_id, answer_id = str(user_id), str(answer_id)
             self.matches[user_id] = answer_id
         self.similarity_scores = None
 
@@ -178,13 +180,30 @@ class MovementSimilarity():
             movement_score_sum = 0
             valid_frame = 0
 
-            if track_id not in bboxes_dict2:
-                continue
+            # if track_id not in bboxes_dict2:
+            #     continue
 
-            frame_keys_dict1 = sorted(bboxes_dict1[track_id].keys())
-            match_id = self.matches[track_id]
-            frame_keys_dict2 = sorted(bboxes_dict2[match_id].keys())
-            # print(frame_keys_dict1, frame_keys_dict2)
+            # frame_key sorting
+            num_keys_dict1 = list(map(int, bboxes_dict1[track_id].keys()))
+            num_keys_dict1.sort()
+            frame_keys_dict1 = list(map(str, num_keys_dict1))
+            
+
+
+            if track_id not in self.matches: continue
+
+
+            # frame_keys_dict1 = sorted(bboxes_dict1[track_id].keys()) # frame keys(str)
+            # print(frame_keys_dict1)
+
+            match_id = self.matches[track_id] # track keys {1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
+            num_keys_dict2 = list(map(int, bboxes_dict2[match_id].keys()))
+            num_keys_dict2.sort()
+            frame_keys_dict2 = list(map(str, num_keys_dict2))
+
+            # frame_keys_dict2 = sorted(bboxes_dict2[match_id].keys())
+            # print(track_id)
+            # print(frame_keys_dict1, frame_keys_dict2, sep='\n')
 
             # for i in range(len(frame_keys_dict1)):
             #     x1, y1 = normalized_video_A[keys_video_A[i]]
@@ -211,10 +230,25 @@ class MovementSimilarity():
                 if i == len(frame_keys_dict1) - 1:
                     break
 
-                # bbox_vector_xy1, bbox_vector_wh1, bbox_vector_score1 = self._flatten_bboxes(bbox)
-                bbox_vector_xy1, bbox_vector_wh1, bbox_vector_score1 = self._flatten_bboxes(frames[frame_keys_dict1[i]])
-                next_bbox_vector_xy1, next_bbox_vector_wh1, next_bbox_vector_score1 = self._flatten_bboxes(frames[frame_keys_dict1[i+1]])
+                # TODO: 현재 프레임_id에 접근하고 다음 프레임은 그 프레임 아이디 idx를 index()로 찾아서 +1 한 곳 : 그 전에 sorting 먼저
+                # dict2 역시 현재 프레임_id에 접근해 보고 없으면 continue, 만약 동일한 frame_id는 있는데 다음 frame_id가 없으면? -> continue
 
+                try:
+                    if frame_id not in frame_keys_dict2: continue
+                    frame_list_idx1 = frame_keys_dict1.index(frame_id)
+                    frame_list_idx2 = frame_keys_dict2.index(frame_id)
+                    if frame_keys_dict2[frame_list_idx2+1] != frame_keys_dict1[frame_list_idx1+1]: continue
+                    
+                    # print(frame_list_idx1, frame_list_idx2)
+                    
+                    # bbox_vector_xy1, bbox_vector_wh1, bbox_vector_score1 = self._flatten_bboxes(frames[frame_keys_dict1[i]])
+                    # next_bbox_vector_xy1, next_bbox_vector_wh1, next_bbox_vector_score1 = self._flatten_bboxes(frames[frame_keys_dict1[i+1]])
+                    bbox_vector_xy1, bbox_vector_wh1, bbox_vector_score1 = self._flatten_bboxes(frames[frame_keys_dict1[frame_list_idx1]])
+                    next_bbox_vector_xy1, next_bbox_vector_wh1, next_bbox_vector_score1 = self._flatten_bboxes(frames[frame_keys_dict1[frame_list_idx1+1]])
+                    # print("bbox_vector_xy1",bbox_vector_xy1)
+                    # print("next_bbox_vector_xy1",next_bbox_vector_xy1)
+                except:
+                    continue
 
                 # print(bbox_vector_xy1, bbox_vector_wh, bbox_vector_score)
                 
@@ -223,8 +257,12 @@ class MovementSimilarity():
                 try:
                     bbox = bboxes_dict2[match_id][frame_id] # There could be non-existing or empty case
                     
-                    bbox_vector_xy2, bbox_vector_wh2, bbox_vector_score2 = self._flatten_bboxes(frames[frame_keys_dict2[i]])
-                    next_bbox_vector_xy2, next_bbox_vector_wh2, next_bbox_vector_score2 = self._flatten_bboxes(frames[frame_keys_dict2[i+1]])
+                    # bbox_vector_xy2, bbox_vector_wh2, bbox_vector_score2 = self._flatten_bboxes(frames[frame_keys_dict2[frame_list_idx2]])
+                    # next_bbox_vector_xy2, next_bbox_vector_wh2, next_bbox_vector_score2 = self._flatten_bboxes(frames[frame_keys_dict2[frame_list_idx2+1]])
+                    bbox_vector_xy2, bbox_vector_wh2, bbox_vector_score2 = self._flatten_bboxes(bboxes_dict2[match_id][frame_keys_dict2[frame_list_idx2]])
+                    next_bbox_vector_xy2, next_bbox_vector_wh2, next_bbox_vector_score2 = self._flatten_bboxes(bboxes_dict2[match_id][frame_keys_dict2[frame_list_idx2+1]])
+                    # print("bbox_vector_xy2", bbox_vector_xy2)
+                    # print("next_bbox_vector_xy2", next_bbox_vector_xy2)
                 except:
                     continue
 
@@ -253,9 +291,11 @@ class MovementSimilarity():
                 bbox_distance = self._get_distance(differences_bbox_vector_xy1, differences_bbox_vector_xy2, weight=bbox_vector_score1, method=distance)
                 # print("b_d", bbox_distance)
 
+                if not (0<=bbox_distance<=1): continue
+
                 # Convert distance to similarity score (0~1)
                 bbox_score = self._get_score(bbox_distance, method=score)
-                # print(bbox_score)
+                print("score", bbox_score)
                 movement_score_sum += bbox_score
                 valid_frame += 1
             # 모든 frame의 similarity 정보들을 이용해 해당 object의 score를 매긴다.
@@ -271,13 +311,14 @@ class MovementSimilarity():
         distance = 0
         if method in ['euclidean', None]:
             distance = sqrt(sum([(x - y) ** 2 for x, y in zip(vec1, vec2)]))
+            print(distance)
         elif method == 'cosine':
             cossim = np.dot(vec1, vec2) / (np.linalg.norm(vec1, 2) * np.linalg.norm(vec2, 2))
             distance = sqrt(2 * (1 - cossim))
         elif method == 'weighted':
             distance = sum([weight[i//2] * ((vec1[i] - vec2[i])**2) for i in range(len(vec1))]) / weight[-1]
 
-        assert 0 <= distance <= 1, 'Distance out of boundary'
+        # assert 0 <= distance <= 1, 'Distance out of boundary'
         return distance
 
     def _get_score(self, distance: float, method=None) -> float:
