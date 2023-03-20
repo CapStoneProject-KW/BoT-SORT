@@ -156,9 +156,14 @@ def detect(mode, data_path, save_img=False):
     # set logging format
     set_logging()
     # cuda device or cpu
+    if torch.cuda.device_count() > 0 and torch.cuda.is_available():
+        opt.device = '0'
+    else:
+        opt.device = 'cpu'
     device = select_device(opt.device)
     # half precision only supported on CUDA
-    half = device.type != 'cpu'
+    print(device.type)
+    half = (device.type != 'cpu')
 
     ### Load model
     # Load YOLOv7 model with designated weight path (FP32 model)
