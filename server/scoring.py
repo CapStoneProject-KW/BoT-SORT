@@ -2,6 +2,7 @@ import argparse
 
 import numpy as np
 from math import sqrt
+import pprint
 
 from typing import Optional
 import json
@@ -43,9 +44,11 @@ class PoseSimilarity():
                 # 각 frame의 similarity를 구해서
                 try:
                     match_id = self.matches[track_id]
+                    # print(match_id)
                     keypoints = pose_dict2[match_id][frame_id] # There could be non-existing or empty case
                     pose_vector_xy2, pose_vector_score2 = self._flatten_poses(keypoints)
                 except:
+                    # print('skip')
                     continue
                 # Keypoint normalization
                 if pose_vector_xy1 == [] or pose_vector_xy2 == [] or len(pose_vector_xy1) != len(pose_vector_xy2):
@@ -64,7 +67,6 @@ class PoseSimilarity():
             # 모든 frame의 similarity 정보들을 이용해 해당 object의 score를 매긴다.
             if valid_frame == 0:
                 continue
-            # print(pose_score_sum, valid_frame) 
             pose_scores[track_id] = pose_score_sum / valid_frame
         # object scores 반환
         self.similarity_scores = pose_scores
@@ -153,9 +155,11 @@ class MovementSimilarity():
         self.bboxes_dict2 = bboxes2 # answer
         self.matches = {}
         for user_id, answer_id in matches:
-            # print(type(user_id), type(answer_id))
-            user_id, answer_id = str(user_id), str(answer_id)
             self.matches[user_id] = answer_id
+        # for user_id, answer_id in matches:
+        #     # print(type(user_id), type(answer_id))
+        #     user_id, answer_id = str(user_id), str(answer_id)
+        #     self.matches[user_id] = answer_id
         self.similarity_scores = None
 
     def calculate_score(self, distance: Optional[str] = None, score: Optional[str] = None) -> dict:
@@ -170,9 +174,12 @@ class MovementSimilarity():
         bboxes_dict1 = self._reformat_bboxes(self.bboxes_dict1)
         bboxes_dict2 = self._reformat_bboxes(self.bboxes_dict2)
 
+        print('일단 탐지 된 객체 수(1번 영상) ', len(list(bboxes_dict1.keys())))
+        print('일단 탐지 된 객체 수(2번 영상) ', len(list(bboxes_dict2.keys())))
+
         # print(json.dumps(bboxes_dict1, ensure_ascii=False, indent=3))
         # print(json.dumps(bboxes_dict2, ensure_ascii=False, indent=3))
-        
+
         movement_scores = {}
         # 각 object에 대해, [key, value]
         for track_id, frames in bboxes_dict1.items():
@@ -184,31 +191,21 @@ class MovementSimilarity():
             #     continue
 
             # frame_key sorting
-            num_keys_dict1 = list(map(int, bboxes_dict1[track_id].keys()))
+            num_keys_dict1 = list(bboxes_dict1[track_id].keys())
             num_keys_dict1.sort()
-            frame_keys_dict1 = list(map(str, num_keys_dict1))
+            frame_keys_dict1 = num_keys_dict1 
             
-
-
             if track_id not in self.matches: continue
 
+            try:
+                match_id = self.matches[track_id] # track keys {1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
+                num_keys_dict2 = list(bboxes_dict2[match_id].keys())
+                num_keys_dict2.sort()
+                frame_keys_dict2 = num_keys_dict2
+            except:
+                continue
 
-            # frame_keys_dict1 = sorted(bboxes_dict1[track_id].keys()) # frame keys(str)
-            # print(frame_keys_dict1)
-
-            match_id = self.matches[track_id] # track keys {1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
-            num_keys_dict2 = list(map(int, bboxes_dict2[match_id].keys()))
-            num_keys_dict2.sort()
-            frame_keys_dict2 = list(map(str, num_keys_dict2))
-
-            # frame_keys_dict2 = sorted(bboxes_dict2[match_id].keys())
-            # print(track_id)
             # print(frame_keys_dict1, frame_keys_dict2, sep='\n')
-
-            # for i in range(len(frame_keys_dict1)):
-            #     x1, y1 = normalized_video_A[keys_video_A[i]]
-            #     x2, y2 = normalized_video_A[keys_video_A[i + 1]]
-            #     differences_video_A.append(calculate_difference(x1, y1, x2, y2))
 
             for i, (frame_id, bbox) in enumerate(frames.items()):
                 '''
@@ -234,10 +231,10 @@ class MovementSimilarity():
                 # dict2 역시 현재 프레임_id에 접근해 보고 없으면 continue, 만약 동일한 frame_id는 있는데 다음 frame_id가 없으면? -> continue
 
                 try:
-                    if frame_id not in frame_keys_dict2: continue
+                    if frame_id not in frame_keys_dict2: continue # 같은 객체인데 동일 프레임에서 나오지 않은 경우
                     frame_list_idx1 = frame_keys_dict1.index(frame_id)
                     frame_list_idx2 = frame_keys_dict2.index(frame_id)
-                    if frame_keys_dict2[frame_list_idx2+1] != frame_keys_dict1[frame_list_idx1+1]: continue
+                    if frame_keys_dict2[frame_list_idx2+1] != frame_keys_dict1[frame_list_idx1+1]: continue # 다음 프레임이 다른 경우
                     
                     # print(frame_list_idx1, frame_list_idx2)
                     
@@ -295,7 +292,7 @@ class MovementSimilarity():
 
                 # Convert distance to similarity score (0~1)
                 bbox_score = self._get_score(bbox_distance, method=score)
-                print("score", bbox_score)
+                # print("score", bbox_score)
                 movement_score_sum += bbox_score
                 valid_frame += 1
             # 모든 frame의 similarity 정보들을 이용해 해당 object의 score를 매긴다.
@@ -311,7 +308,7 @@ class MovementSimilarity():
         distance = 0
         if method in ['euclidean', None]:
             distance = sqrt(sum([(x - y) ** 2 for x, y in zip(vec1, vec2)]))
-            print(distance)
+            # print(distance)
         elif method == 'cosine':
             cossim = np.dot(vec1, vec2) / (np.linalg.norm(vec1, 2) * np.linalg.norm(vec2, 2))
             distance = sqrt(2 * (1 - cossim))
