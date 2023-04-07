@@ -275,6 +275,7 @@ class BoTSORT(object):
         self.appearance_thresh = args.appearance_thresh
         # flag: use Re-ID module
         if args.with_reid:
+            print(args.device)
             self.encoder = FastReIDInterface(args.fast_reid_config, args.fast_reid_weights, args.device)
         # Global motion compensation (GMC) technique for camera motion compensation (CMC)
         self.gmc = GMC(method=args.cmc_method, verbose=[args.name, args.ablation])

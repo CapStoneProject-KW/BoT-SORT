@@ -4,7 +4,7 @@ loguru
 scikit-image
 scikit-learn
 tqdm
-torchvision>=0.10.0
+# torchvision>=0.10.0
 Pillow
 thop
 ninja
