@@ -1,6 +1,7 @@
 from typing import Optional
 import json
 import os
+import cv2
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -16,7 +17,6 @@ class Item(BaseModel):
     user_or_answer: str
     mode: str
     data_path: str
-    ckpt_path: str
 
 class TrackItem(BaseModel):
     user_or_answer: str
@@ -45,12 +45,11 @@ def main():
 def read_item(item_id: int, q: Optional[str] = None):
     return {"item_id": item_id, "q": q}
 
-
 @app.post("/detect_video")
 async def detect_video(item: Item):
     '''
     Descripiton: 
-    Args: mode, data_path, ckpt_path
+    Args: mode, data_path
     Return: detection result of first frame 
     '''
     # TODO: 이미지 저장 경로 인자로 받기, user인지 answer인지
@@ -63,15 +62,27 @@ async def detect_video(item: Item):
     #mode = item_dict["mode"]
     user_or_answer = item_dict["user_or_answer"]
     data_path = item_dict["data_path"]
-    ckpt_path = item_dict["ckpt_path"]
+    # ckpt_path = item_dict["ckpt_path"]
 
     # make save directory
     s = list(os.path.split(data_path))
     json_save_path = s[:-1][0]+f'/{user_or_answer}_det_result.json' # data_path + det_result.json
     img_save_path = s[:-1][0]+f'/{user_or_answer}_det_img.jpg'
 
+    # save first frame image for purpose of giving server
+    cap = cv2.VideoCapture(data_path)
+    if not cap.isOpened(): print("Error opening video file")
+
+    ret, frame = cap.read()
+    if not ret: print("Error reading frame")
+    
+    cv2.imwrite(img_save_path, frame)
+    cap.release()
+    cv2.destroyAllWindows()
+    print('저장 완료')
+
     # run model
-    det_result = run_model('detection', data_path, ckpt_path)
+    det_result = run_model('detection', data_path)
     print('[Detection Result]')
     pprint.pprint(det_result)
    
@@ -85,8 +96,7 @@ async def detect_video(item: Item):
         "msg": "완료되었습니다.",
         "json_save_path": json_save_path,
         "img_save_path": img_save_path,
-        "det_result": det_result,
-
+        # "det_result": det_result,
     }
     
     # return result
