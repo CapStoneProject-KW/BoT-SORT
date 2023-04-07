@@ -102,7 +102,7 @@ def get_opt():
         "img_size": 640,
         "conf_thres" : 0.25,
         "iou_thres" : 0.45,
-        "device" : '',
+        "device" : 'cpu',
         "view_img" : False,
         "save_txt" : False,
         "save_conf" :False,
@@ -260,7 +260,7 @@ def detect(mode, data_path, save_img=False):
     ### Create tracker
     fps = int(cv2.VideoCapture(source).get(cv2.CAP_PROP_FPS))
     if run_mode == 'tracking':
-        opt.with_reid = True # False
+        opt.with_reid = (opt.device != 'cpu') 
         # thresh: the lower, the robuster (distance)
         opt.proximity_thresh = 0.5 # 0.5
         opt.appearance_thresh = 0.25 # 0.25

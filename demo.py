@@ -15,7 +15,7 @@ if __name__ == '__main__':
         det_image_answer, det_result_answer = run_model(mode, data_path_answer)
         # print(type(det_image_answer), det_image_answer)
         det_image_user, det_result_user = run_model(mode, data_path_user)
-        print(first_frame_img_path_answer)
+        # print(first_frame_img_path_answer)
         # print(type(det_image_user), det_image_user)
         print('[Detection Result]')
         print('Answer Video')
@@ -88,10 +88,10 @@ if __name__ == '__main__':
         # tmp_user = './runs/230130/exp/mot_result.json'
         # tmp_answer = './runs/230130/exp3/mot_result.json'
 
-        with open('./runs/230130/exp2/mot_result.json', 'r') as f:
-            tmp_user = json.load(f)
-        with open('./runs/230131/exp/mot_result.json', 'r') as f:
-            tmp_answer = json.load(f)
+        # with open('./runs/230130/exp2/mot_result.json', 'r') as f:
+        #     tmp_user = json.load(f)
+        # with open('./runs/230131/exp/mot_result.json', 'r') as f:
+        #     tmp_answer = json.load(f)
 
         matches = [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']]
         pose_scores = run_scoring('pose', 
@@ -101,8 +101,8 @@ if __name__ == '__main__':
                                 distance='euclidean', 
                                 score='simple')
         movement_scores = run_scoring('movement', 
-                                tmp_user, 
-                                tmp_answer, 
+                                mot_result_user, 
+                                mot_result_answer, 
                                 matches=matches,
                                 distance='euclidean', 
                                 score='simple')
