@@ -29,6 +29,11 @@ class ScoringItem(BaseModel):
     user_mot_result: str
     answer_mot_result: str
 
+class ResultItem(BaseModel):
+    scoring_path: str
+    user_video_path: str
+    answer_video_path: str
+
 app = FastAPI()
 
 """
@@ -87,8 +92,8 @@ async def detect_video(item: Item):
     pprint.pprint(det_result)
    
     # save result
-    # with open(save_path, 'w') as f:
-    #     json.dump(det_result, f, indent=4)
+    with open(json_save_path, 'w') as f:
+        json.dump(det_result[1], f, indent=4)
 
     print("완료")
 
@@ -131,18 +136,18 @@ async def tracking_video(item: TrackItem):
         mot_save_path = s[:-1][0]+'/answer_mot_result.json' # data_path + answer_mot_result.json
 
     # run model
-    kpt_result, mot_result = run_model('tracking', data_path, ckpt_path)
+    kpt_result, mot_result = run_model('tracking', data_path)
 
     # print('[Keypoint Result]')
     # pprint.pprint(print_kpt)
     # print('[Tracking Result]')
     # pprint.pprint(print_mot)
 
-    # with open(save_path, 'w') as f:
-    #     json.dump(kpt_save_path, f, indent=4)
+    with open(kpt_save_path, 'w') as f:
+        json.dump(kpt_result, f, indent=4)
 
-    # with open(save_path, 'w') as f:
-    #     json.dump(mot_save_path, f, indent=4)
+    with open(mot_save_path, 'w') as f:
+        json.dump(mot_result, f, indent=4)
 
     print("완료")
 
@@ -166,6 +171,7 @@ async def scoring(item: ScoringItem):
     Args: user_kpt_result, answer_kpt_result, user_mot_result, answer_mot_result
     Return: Pose Score, Movement Score each track_id
     '''
+    # TODO: frame 별 score -> 저장 경로 지정
     
     # run_model("detection", "../datasets/last_dance/user_video.mp4", "../pretrained/yolov7.pt")
     item_dict = item.dict()
@@ -179,23 +185,27 @@ async def scoring(item: ScoringItem):
 
     # loading 4 json files
     with open(user_kpt_result, 'r') as f:
-        user_kpt_result = json.load(f)
+        user_kpt_result_dict = json.load(f)
     with open(answer_kpt_result, 'r') as f:
-        answer_kpt_result = json.load(f)
+        answer_kpt_result_dict = json.load(f)
     with open(user_mot_result, 'r') as f:
-        user_mot_result = json.load(f)
+        user_mot_result_dict = json.load(f)
     with open(answer_mot_result, 'r') as f:
-        answer_mot_result = json.load(f)
+        answer_mot_result_dict = json.load(f)
 
+
+    matches = [['1', '1']]
     # run scoring function
-    pose_scores = run_scoring('pose', 
-                            user_kpt_result, 
-                            answer_kpt_result, 
+    pose_scores, score_per_pose = run_scoring('pose',                       
+                            user_kpt_result_dict,
+                            answer_kpt_result_dict, 
+                            matches=matches,
                             distance='weighted', 
                             score='simple')
-    movement_scores = run_scoring('movement', 
-                            user_mot_result, 
-                            answer_mot_result, 
+    movement_scores, score_per_move = run_scoring('movement', 
+                            user_mot_result_dict, 
+                            answer_mot_result_dict, 
+                            matches=matches,
                             distance='weighted', 
                             score='simple')
 
@@ -213,9 +223,14 @@ async def scoring(item: ScoringItem):
         "pose_scores": pose_scores,
         "movement_scores": movement_scores
     }
-
-    print("완료")
     
     return result
 
-
+@app.post("/result_video")
+async def scoring(item: ScoringItem):
+    '''
+    Descripiton:
+    Args: user_kpt_result, answer_kpt_result, user_mot_result, answer_mot_result
+    Return: Pose Score, Movement Score each track_id
+    '''
+    
