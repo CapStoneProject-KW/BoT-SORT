@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 from math import sqrt
 import pprint
+from collections import defaultdict
 
 from typing import Optional
 import json
@@ -14,6 +15,7 @@ class PoseSimilarity():
         self.matches = {}
         for user_id, answer_id in matches:
             self.matches[user_id] = answer_id
+        # print(matches)
         self.similarity_scores = None
 
     def calculate_score(self, distance: Optional[str] = None, score: Optional[str] = None) -> dict:
@@ -32,16 +34,20 @@ class PoseSimilarity():
         # print(json.dumps(pose_dict2, ensure_ascii=False, indent=3))
 
         pose_scores = {}
+        result_dict = {}
         # 각 object에 대해, [key, value]
         for track_id, frames in pose_dict1.items():
+            result_dict[track_id] = {}
             # 각 frame에 대해, 
             pose_score_sum = 0
             valid_frame = 0
+            # print(track_id, frames)
             for frame_id, keypoints in frames.items():
                 # keypoints 정보를 flatten
                 pose_vector_xy1, pose_vector_score1 = self._flatten_poses(keypoints)
                 # 이걸 pose 2개에 대해 하고, 
                 # 각 frame의 similarity를 구해서
+                # print(type(track_id), 'asdf', self.matches[track_id])
                 try:
                     match_id = self.matches[track_id]
                     # print(match_id)
@@ -63,6 +69,7 @@ class PoseSimilarity():
                 # Convert distance to similarity score (0~1)
                 pose_score = self._get_score(pose_distance, method=score)
                 pose_score_sum += pose_score
+                result_dict[track_id][frame_id] = pose_score
                 valid_frame += 1
             # 모든 frame의 similarity 정보들을 이용해 해당 object의 score를 매긴다.
             if valid_frame == 0:
@@ -70,7 +77,10 @@ class PoseSimilarity():
             pose_scores[track_id] = pose_score_sum / valid_frame
         # object scores 반환
         self.similarity_scores = pose_scores
-        return pose_scores
+        # print(pose_scores)
+        with open('runs/scoring_pose.json', 'w') as f:
+            json.dump(result_dict, f, indent=4)
+        return pose_scores, result_dict
 
     def _get_distance(self, vec1: list, vec2: list, weight=None, method=None) -> float:
         distance = 0
@@ -161,6 +171,9 @@ class MovementSimilarity():
         #     user_id, answer_id = str(user_id), str(answer_id)
         #     self.matches[user_id] = answer_id
         self.similarity_scores = None
+    
+    def _create_default_dict():
+        return defaultdict()
 
     def calculate_score(self, distance: Optional[str] = None, score: Optional[str] = None) -> dict:
         # distance와 score가 리스트안의 원소 값을 가져야 함을 보장
@@ -170,12 +183,14 @@ class MovementSimilarity():
         # print(self.bboxes_dict1)
         # print(self.bboxes_dict2)
 
+        result_dict = {}
+
         # 각 tracking object에 대해서 프레임마다 바뀌는 keypoint들 좌표 - 제일 상위 key가 track_id(... -> frame_id -> keypoints)
         bboxes_dict1 = self._reformat_bboxes(self.bboxes_dict1)
         bboxes_dict2 = self._reformat_bboxes(self.bboxes_dict2)
 
-        print('일단 탐지 된 객체 수(1번 영상) ', len(list(bboxes_dict1.keys())))
-        print('일단 탐지 된 객체 수(2번 영상) ', len(list(bboxes_dict2.keys())))
+        # print('일단 탐지 된 객체 수(1번 영상) ', len(list(bboxes_dict1.keys())))
+        # print('일단 탐지 된 객체 수(2번 영상) ', len(list(bboxes_dict2.keys())))
 
         # print(json.dumps(bboxes_dict1, ensure_ascii=False, indent=3))
         # print(json.dumps(bboxes_dict2, ensure_ascii=False, indent=3))
@@ -183,6 +198,7 @@ class MovementSimilarity():
         movement_scores = {}
         # 각 object에 대해, [key, value]
         for track_id, frames in bboxes_dict1.items():
+            result_dict[track_id] = {}
             # 각 frame에 대해, 
             movement_score_sum = 0
             valid_frame = 0
@@ -207,7 +223,10 @@ class MovementSimilarity():
 
             # print(frame_keys_dict1, frame_keys_dict2, sep='\n')
 
+            
+
             for i, (frame_id, bbox) in enumerate(frames.items()):
+                
                 '''
                 {
                     "x1": 152.7,
@@ -295,6 +314,18 @@ class MovementSimilarity():
                 # print("score", bbox_score)
                 movement_score_sum += bbox_score
                 valid_frame += 1
+                # print(track_id, type(track_id), frame_id, type(track_id), bbox_score)
+                result_dict[track_id][frame_id] = bbox_score
+                # pprint.pprint(result_dict)
+                '''
+                {
+                    {track_id1} : {
+                        {frame_id1} : {score},
+                        {frame_id2} : {score},
+                    }
+
+                }
+                '''
             # 모든 frame의 similarity 정보들을 이용해 해당 object의 score를 매긴다.
             # print(movement_score_sum, valid_frame) 
             if valid_frame == 0:
@@ -302,7 +333,10 @@ class MovementSimilarity():
             movement_scores[track_id] = movement_score_sum / valid_frame
         # object scores 반환
         self.similarity_scores = movement_scores
-        return movement_scores
+        with open('runs/scoring_move.json', 'w') as f:
+            json.dump(result_dict, f, indent=4)
+        pprint.pprint(result_dict)
+        return movement_scores, result_dict
 
     def _get_distance(self, vec1: list, vec2: list, weight=None, method=None) -> float:
         distance = 0
@@ -409,7 +443,7 @@ class MovementSimilarity():
 
 def run_scoring(mode, dict1, dict2, matches, distance=None, score=None):
 
-    matches = [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]
+    # matches = [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]
     if mode == 'pose':
         similarity_obj = PoseSimilarity(dict1, dict2, matches)
     elif mode == 'movement':
