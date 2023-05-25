@@ -17,8 +17,8 @@ from yolov7.utils.general import check_img_size, check_requirements, check_imsho
 from yolov7.utils.plots import plot_one_box
 from yolov7.utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
 
-from tracker.tracking import BoTSORT
-# from tracker.mc_bot_sort import BoTSORT
+# from tracker.tracking import BoTSORT
+from tracker.mc_bot_sort import BoTSORT
 from tracker.tracking_utils.timer import Timer
 
 import json
@@ -39,7 +39,7 @@ def write_results(filename, results):
         f.write(''.join(results))
     print('Saved results to {}'.format(filename))
 
-def detect(save_img=False):
+def detect(save_img=True):
     ### Parsing arguments
     run_mode = opt.mode
     source = opt.source
