@@ -200,13 +200,13 @@ async def scoring(item: ScoringItem):
                             user_kpt_result_dict,
                             answer_kpt_result_dict, 
                             matches=matches,
-                            distance='weighted', 
+                            distance='euclidean', 
                             score='simple')
     movement_scores, score_per_move = run_scoring('movement', 
                             user_mot_result_dict, 
                             answer_mot_result_dict, 
                             matches=matches,
-                            distance='weighted', 
+                            distance='euclidean', 
                             score='simple')
 
     print('[Pose Score]')
